@@ -35,6 +35,11 @@ const FIELDS: (keyof Omit<IndexedPoem, 'id'>)[] = [
   'category',
 ]
 
+/** Join a list field defensively — a malformed record must never break search. */
+function joinList(value: unknown): string {
+  return Array.isArray(value) ? value.filter((v) => typeof v === 'string').join(' ') : ''
+}
+
 function toDoc(p: Poem): IndexedPoem {
   return {
     id: p.id,
@@ -44,9 +49,9 @@ function toDoc(p: Poem): IndexedPoem {
     translation: p.translation ?? '',
     transliteration: p.transliteration ?? '',
     authorName: p.authorName ?? '',
-    tags: p.tags.join(' '),
-    topics: p.topics.join(' '),
-    occasions: p.occasions.join(' '),
+    tags: joinList(p.tags),
+    topics: joinList(p.topics),
+    occasions: joinList(p.occasions),
     category: p.category ?? '',
   }
 }
@@ -75,7 +80,21 @@ export class SearchIndex {
   /** Replace the entire index (called when the poem set changes wholesale). */
   rebuild(poems: Poem[]): void {
     this.mini = createIndex()
-    this.mini.addAll(poems.map(toDoc))
+    try {
+      this.mini.addAll(poems.map(toDoc))
+    } catch (err) {
+      // Indexing must never take the whole app down; fall back to indexing
+      // record-by-record so one bad row only loses its own searchability.
+      console.error('Search index rebuild failed, retrying per-record:', err)
+      this.mini = createIndex()
+      for (const p of poems) {
+        try {
+          this.mini.add(toDoc(p))
+        } catch {
+          /* skip the unindexable record */
+        }
+      }
+    }
   }
 
   /** Return matching poem IDs, best-ranked first. Empty query -> []. */
@@ -83,12 +102,5 @@ export class SearchIndex {
     const q = query.trim()
     if (!q) return []
     return this.mini.search(q).map((r) => r.id as string)
-  }
-
-  /** Autocomplete suggestions for the search box. */
-  suggest(query: string): string[] {
-    const q = query.trim()
-    if (!q) return []
-    return this.mini.autoSuggest(q, { fuzzy: 0.2 }).map((s) => s.suggestion).slice(0, 6)
   }
 }

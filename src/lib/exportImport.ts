@@ -12,7 +12,7 @@
 import { zip, unzip, strToU8, strFromU8, type Unzipped } from 'fflate'
 import { db } from '@/db/database'
 import { newId } from './id'
-import { contentHash, detectLanguage } from './text'
+import { asStringArray, contentHash, detectLanguage } from './text'
 import type {
   Author,
   Collection,
@@ -84,9 +84,19 @@ export async function exportLibrary(): Promise<Blob> {
     mediaMeta.push({ ...rest, hasThumbnail: !!m.thumbnail })
   }
 
-  // Never export the raw API key.
-  const settings = settingsRow ? { ...settingsRow } : undefined
-  if (settings) delete (settings as Partial<AppSettings>).aiCorrectionKey
+  // Strip every credential and private endpoint. A backup is often shared with
+  // family or restored on a borrowed device; it must not carry the user's API
+  // key or the URL of their personal backup storage.
+  let settings: Partial<AppSettings> | undefined
+  if (settingsRow) {
+    const {
+      aiCorrectionKey: _k,
+      syncEndpoint: _s,
+      aiCorrectionEndpoint: _e,
+      ...safe
+    } = settingsRow
+    settings = safe
+  }
 
   const manifest: Archive = {
     version: ARCHIVE_VERSION,
@@ -102,6 +112,26 @@ export async function exportLibrary(): Promise<Blob> {
 
   const packed = await zipAsync(files)
   return new Blob([toBuffer(packed)], { type: 'application/zip' })
+}
+
+/** Force a restored poem row into a shape the rest of the app can rely on. */
+function sanitizePoem(p: Poem): Poem {
+  return {
+    ...p,
+    title: typeof p.title === 'string' ? p.title : '',
+    text: typeof p.text === 'string' ? p.text : '',
+    collectionIds: asStringArray(p.collectionIds),
+    topics: asStringArray(p.topics),
+    occasions: asStringArray(p.occasions),
+    tags: asStringArray(p.tags),
+    imageIds: asStringArray(p.imageIds),
+    pdfIds: asStringArray(p.pdfIds),
+    favourite: p.favourite === true,
+    viewCount: Number.isFinite(p.viewCount) ? p.viewCount : 0,
+    contentHash: typeof p.contentHash === 'string' && p.contentHash ? p.contentHash : contentHash(p.text ?? ''),
+    createdAt: Number.isFinite(p.createdAt) ? p.createdAt : Date.now(),
+    updatedAt: Number.isFinite(p.updatedAt) ? p.updatedAt : Date.now(),
+  }
 }
 
 export interface ImportSummary {
@@ -121,6 +151,12 @@ export async function importLibrary(
   const manifestBytes = out['library.json']
   if (!manifestBytes) throw new Error('Not a valid Recitation backup (missing library.json)')
   const manifest = JSON.parse(strFromU8(manifestBytes)) as Archive
+  // An archive is user-supplied data: repair any malformed array fields before
+  // they reach the database, where they would break search and list rendering.
+  manifest.poems = (manifest.poems ?? []).filter((p) => p && typeof p.id === 'string').map(sanitizePoem)
+  manifest.authors = (manifest.authors ?? []).filter((a) => a && typeof a.id === 'string')
+  manifest.collections = (manifest.collections ?? []).filter((c) => c && typeof c.id === 'string')
+  manifest.media = (manifest.media ?? []).filter((m) => m && typeof m.id === 'string')
 
   const media: MediaAsset[] = manifest.media.map((meta) => {
     const raw = out[`media/${meta.id}`]
@@ -232,9 +268,10 @@ export async function importSimplePoems(items: SimplePoemInput[]): Promise<numbe
       authorName,
       collectionIds: [],
       category: item.category,
-      topics: item.topics ?? [],
-      occasions: item.occasions ?? [],
-      tags: item.tags ?? [],
+      // Never trust the shape of imported fields — see `asStringArray`.
+      topics: asStringArray(item.topics),
+      occasions: asStringArray(item.occasions),
+      tags: asStringArray(item.tags),
       imageIds: [],
       pdfIds: [],
       notes: item.notes,

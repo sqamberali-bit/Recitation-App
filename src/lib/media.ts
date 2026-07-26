@@ -18,7 +18,15 @@ interface DecodedImage {
 }
 
 async function decode(file: Blob): Promise<DecodedImage> {
-  const bitmap = await createImageBitmap(file)
+  // `imageOrientation: 'from-image'` applies the EXIF rotation tag. Without it,
+  // portrait photos from a phone decode sideways and are stored that way.
+  let bitmap: ImageBitmap
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
+  } catch {
+    // Older engines reject the options bag — fall back to a plain decode.
+    bitmap = await createImageBitmap(file)
+  }
   return { bitmap, width: bitmap.width, height: bitmap.height }
 }
 
@@ -45,12 +53,9 @@ async function canvasToBlob(
   if ('convertToBlob' in canvas) {
     return canvas.convertToBlob({ type, quality })
   }
+  const el = canvas as HTMLCanvasElement
   return new Promise((resolve, reject) => {
-    ;(canvas as HTMLCanvasElement).toBlob(
-      (b) => (b ? resolve(b) : reject(new Error('toBlob failed'))),
-      type,
-      quality,
-    )
+    el.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), type, quality)
   })
 }
 
@@ -132,13 +137,4 @@ export function makePdfAsset(file: File, poemId: string, order: number): MediaAs
     order,
     createdAt: Date.now(),
   }
-}
-
-/**
- * Create and track an object URL, returning a disposer. Callers must revoke to
- * avoid leaks (the reader/gallery do this in effect cleanups).
- */
-export function objectUrl(blob: Blob): { url: string; revoke: () => void } {
-  const url = URL.createObjectURL(blob)
-  return { url, revoke: () => URL.revokeObjectURL(url) }
 }

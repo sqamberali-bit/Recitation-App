@@ -12,6 +12,7 @@ import {
   IconGlobe,
 } from '@/components/icons'
 import { TagInput } from '@/components/TagInput'
+import { useObjectUrl } from '@/components/BlobImage'
 import { useToast } from '@/components/Toast'
 import { useConfirm } from '@/components/Confirm'
 import { useLibrary } from '@/store/library'
@@ -72,20 +73,43 @@ export function EditorPage() {
 
   /* ---------------- load existing ---------------- */
   useEffect(() => {
-    if (isNew) return
     let alive = true
-    getPoemWithMedia(id!).then((data) => {
-      if (!alive) return
-      if (!data) {
-        toast.error('Poem not found')
-        navigate('/')
-        return
-      }
-      const { poem, images, pdfs } = data
-      setDraft({ ...poem })
-      setExistingMedia([...images, ...pdfs])
+
+    // Reset every time the route changes. Without this, navigating from an
+    // existing poem straight to "New poem" would keep the previous draft.id
+    // and saving would silently OVERWRITE the poem being edited before.
+    setExistingMedia([])
+    setNewMedia([])
+    setRemovedIds([])
+    setDirty(false)
+
+    if (isNew) {
+      setDraft(EMPTY)
       setLoading(false)
-    })
+      return
+    }
+
+    setLoading(true)
+    getPoemWithMedia(id!)
+      .then((data) => {
+        if (!alive) return
+        if (!data) {
+          toast.error('Poem not found')
+          navigate('/')
+          return
+        }
+        const { poem, images, pdfs } = data
+        setDraft({ ...poem })
+        setExistingMedia([...images, ...pdfs])
+        setLoading(false)
+      })
+      .catch((err) => {
+        if (!alive) return
+        // Without this the page would sit on a skeleton forever.
+        toast.error(err instanceof Error ? err.message : 'Could not open this poem')
+        navigate('/')
+      })
+
     return () => {
       alive = false
     }
@@ -95,6 +119,24 @@ export function EditorPage() {
   const set = useCallback(<K extends keyof PoemDraft>(key: K, value: PoemDraft[K]) => {
     setDraft((d) => ({ ...d, [key]: value }))
     setDirty(true)
+  }, [])
+
+  /**
+   * Functional update. Required wherever the new value derives from the current
+   * draft *after* an `await` — the `draft` captured in that closure is stale, so
+   * `set('text', draft.text + more)` would discard anything typed meanwhile.
+   */
+  const edit = useCallback((fn: (d: PoemDraft) => PoemDraft) => {
+    setDraft(fn)
+    setDirty(true)
+  }, [])
+
+  // The Tesseract worker holds tens of MB (wasm core + language data). Release
+  // it when leaving the editor so long sessions on a phone stay light.
+  useEffect(() => {
+    return () => {
+      void import('@/lib/ocr').then((m) => m.disposeOcr())
+    }
   }, [])
 
   // Warn before losing unsaved work (tab close / refresh).
@@ -112,7 +154,9 @@ export function EditorPage() {
   const duplicate = useMemo(() => {
     if (!draft.text.trim()) return null
     const hash = contentHash(draft.text)
-    return poems.find((p) => p.contentHash === hash && p.id !== draft.id) ?? null
+    // Compare only against poems that actually have text — image-only poems
+    // share the empty-text hash and are not duplicates of anything.
+    return poems.find((p) => p.contentHash === hash && p.id !== draft.id && !!p.text?.trim()) ?? null
   }, [draft.text, draft.id, poems])
 
   /* ---------------- media handling ---------------- */
@@ -129,7 +173,9 @@ export function EditorPage() {
     }
     if (!processed.length) return
     setNewMedia((m) => [...m, ...processed])
-    set('imageIds', [...draft.imageIds, ...processed.map((p) => p.id)])
+    // Functional: image processing is async, so `draft` here is stale — a second
+    // pick started before the first finished would otherwise drop assets.
+    edit((d) => ({ ...d, imageIds: [...d.imageIds, ...processed.map((p) => p.id)] }))
     toast.show(`${processed.length} image${processed.length > 1 ? 's' : ''} added`)
   }
 
@@ -138,7 +184,7 @@ export function EditorPage() {
     const startOrder = existingMedia.length + newMedia.length
     const assets = Array.from(files).map((f, i) => makePdfAsset(f, draft.id ?? 'pending', startOrder + i))
     setNewMedia((m) => [...m, ...assets])
-    set('pdfIds', [...draft.pdfIds, ...assets.map((a) => a.id)])
+    edit((d) => ({ ...d, pdfIds: [...d.pdfIds, ...assets.map((a) => a.id)] }))
   }
 
   const removeMedia = (asset: MediaAsset) => {
@@ -148,9 +194,13 @@ export function EditorPage() {
     } else {
       setNewMedia((m) => m.filter((x) => x.id !== asset.id))
     }
-    set('imageIds', draft.imageIds.filter((x) => x !== asset.id))
-    set('pdfIds', draft.pdfIds.filter((x) => x !== asset.id))
-    setDirty(true)
+    // One functional update: two sequential `set` calls would each build from
+    // the same stale draft and the second would undo the first.
+    edit((d) => ({
+      ...d,
+      imageIds: d.imageIds.filter((x) => x !== asset.id),
+      pdfIds: d.pdfIds.filter((x) => x !== asset.id),
+    }))
   }
 
   const allImages = [...existingMedia, ...newMedia].filter((m) => m.type === 'image')
@@ -170,7 +220,9 @@ export function EditorPage() {
         toast.error('No text detected in this image')
         return
       }
-      set('text', draft.text ? `${draft.text}\n\n${result.text}` : result.text)
+      // OCR takes seconds; append against the *current* text so anything typed
+      // while it ran is preserved.
+      edit((d) => ({ ...d, text: d.text ? `${d.text}\n\n${result.text}` : result.text }))
       toast.show(`Text extracted (${Math.round(result.confidence)}% confidence)`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'OCR failed')
@@ -190,9 +242,11 @@ export function EditorPage() {
   const runAiCorrect = async () => {
     if (!draft.text.trim()) return
     setAiBusy(true)
+    const sourceText = draft.text
     try {
-      const corrected = await aiCorrect(draft.text, aiOpts)
-      set('text', corrected)
+      const corrected = await aiCorrect(sourceText, aiOpts)
+      // Don't clobber edits made while the request was in flight.
+      edit((d) => (d.text === sourceText ? { ...d, text: corrected } : d))
       toast.show('Text corrected')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'AI correction failed')
@@ -489,13 +543,7 @@ function MediaTile({
   onRemove: () => void
   onOcr: () => void
 }) {
-  const [url, setUrl] = useState<string>()
-  useEffect(() => {
-    const blob = asset.thumbnail ?? asset.blob
-    const u = URL.createObjectURL(blob)
-    setUrl(u)
-    return () => URL.revokeObjectURL(u)
-  }, [asset])
+  const url = useObjectUrl(asset.thumbnail ?? asset.blob)
 
   return (
     <div style={{ position: 'relative' }}>

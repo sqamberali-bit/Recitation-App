@@ -31,6 +31,9 @@ interface LibraryContextValue {
 
 const LibraryContext = createContext<LibraryContextValue | null>(null)
 
+/** Shared empty array so the loading state keeps a stable reference. */
+const EMPTY_POEMS: Poem[] = []
+
 function tally(values: Iterable<string>): Facet[] {
   const counts = new Map<string, number>()
   for (const v of values) {
@@ -42,12 +45,17 @@ function tally(values: Iterable<string>): Facet[] {
     .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value))
 }
 
+/** Read a list field defensively — a malformed record must not break browsing. */
+function listOf(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
+}
+
 function computeFacets(poems: Poem[]): Facets {
   return {
     categories: tally(poems.map((p) => p.category ?? '').filter(Boolean)),
-    tags: tally(poems.flatMap((p) => p.tags)),
-    topics: tally(poems.flatMap((p) => p.topics)),
-    occasions: tally(poems.flatMap((p) => p.occasions)),
+    tags: tally(poems.flatMap((p) => listOf(p.tags))),
+    topics: tally(poems.flatMap((p) => listOf(p.topics))),
+    occasions: tally(poems.flatMap((p) => listOf(p.occasions))),
     kinds: tally(poems.map((p) => p.kind)),
     languages: tally(poems.map((p) => p.language)),
   }
@@ -59,7 +67,9 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const collections = useLiveQuery(() => db.collections.orderBy('name').toArray(), [], [])
 
   const ready = poems !== undefined
-  const list = poems ?? []
+  // Stable identity while loading: a fresh `[]` each render would rebuild the
+  // search index and recompute every facet on every render.
+  const list = useMemo(() => poems ?? EMPTY_POEMS, [poems])
 
   const byId = useMemo(() => new Map(list.map((p) => [p.id, p])), [list])
 
@@ -109,15 +119,16 @@ export function runQuery(
     if (q.language && p.language !== q.language) return false
     if (q.kind && p.kind !== q.kind) return false
     if (q.authorId && p.authorId !== q.authorId) return false
-    if (q.collectionId && !p.collectionIds.includes(q.collectionId)) return false
+    if (q.collectionId && !listOf(p.collectionIds).includes(q.collectionId)) return false
     if (q.category && p.category !== q.category) return false
-    if (q.tag && !p.tags.includes(q.tag)) return false
+    if (q.tag && !listOf(p.tags).includes(q.tag)) return false
     if (q.favouritesOnly && !p.favourite) return false
     return true
   })
 
-  // When searching, keep relevance order unless an explicit sort is requested.
-  if (hasText && !q.sort) return list
+  // While searching, relevance is the most useful order — honour an explicit
+  // sort only when the user picks something other than the default.
+  if (hasText && (!q.sort || q.sort === 'relevance')) return list
 
   const sort = q.sort ?? 'recent'
   const cmp: Record<string, (a: Poem, b: Poem) => number> = {

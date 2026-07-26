@@ -17,7 +17,7 @@ export function LibraryPage() {
   const [params, setParams] = useSearchParams()
 
   const [text, setText] = useState('')
-  const [query, setQuery] = useState<LibraryQuery>({ sort: 'recent' })
+  const [query, setQuery] = useState<LibraryQuery>({})
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [visible, setVisible] = useState(PAGE)
@@ -110,9 +110,11 @@ export function LibraryPage() {
           <select
             className="select"
             style={{ width: 'auto', padding: '6px 30px 6px 12px' }}
-            value={query.sort ?? 'recent'}
+            value={query.sort ?? (text.trim() ? 'relevance' : 'recent')}
             onChange={(e) => set({ sort: e.target.value as LibraryQuery['sort'] })}
+            aria-label="Sort results"
           >
+            {text.trim() && <option value="relevance">Best match</option>}
             <option value="recent">Recently updated</option>
             <option value="created">Newest added</option>
             <option value="title">Title A–Z</option>

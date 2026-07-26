@@ -32,10 +32,13 @@ export function useWakeLock(active: boolean): void {
       }
     }
 
+    // The browser releases the lock whenever the tab is hidden, so on return we
+    // must re-acquire it precisely when the previous sentinel IS released
+    // (or absent) — otherwise the screen sleeps mid-recitation.
     const onVisibility = () => {
-      if (document.visibilityState === 'visible' && !sentinelRef.current?.released) {
-        void acquire()
-      }
+      if (document.visibilityState !== 'visible') return
+      const sentinel = sentinelRef.current
+      if (!sentinel || sentinel.released) void acquire()
     }
 
     void acquire()

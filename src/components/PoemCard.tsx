@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { IconStarFill, IconImage, IconClock } from './icons'
+import { BlobImage } from './BlobImage'
 import { directionOf, excerpt } from '@/lib/text'
 import { getMedia, toggleFavourite } from '@/db/repository'
 import type { Poem } from '@/types'
@@ -24,18 +25,6 @@ function useThumb(id?: string): Blob | undefined {
   return blob
 }
 
-function Thumb({ blob }: { blob: Blob | undefined }) {
-  const [url, setUrl] = useState<string>()
-  useEffect(() => {
-    if (!blob) return
-    const u = URL.createObjectURL(blob)
-    setUrl(u)
-    return () => URL.revokeObjectURL(u)
-  }, [blob])
-  if (!url) return null
-  return <img className="card__thumb" src={url} alt="" loading="lazy" />
-}
-
 export function PoemCard({ poem }: { poem: Poem }) {
   const navigate = useNavigate()
   const thumb = useThumb(poem.imageIds[0])
@@ -51,7 +40,7 @@ export function PoemCard({ poem }: { poem: Poem }) {
       <div className="card__top">
         <span className="card__kind">{poem.kind}</span>
       </div>
-      {thumb && <Thumb blob={thumb} />}
+      {thumb && <BlobImage className="card__thumb" blob={thumb} loading="lazy" />}
       <div className={`card__title ${titleRtl ? 'card__title--urdu' : ''}`} dir={titleRtl ? 'rtl' : 'ltr'}>
         {displayTitle}
       </div>

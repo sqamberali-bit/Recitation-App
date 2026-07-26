@@ -53,6 +53,17 @@ export async function savePoem(input: SavePoemInput): Promise<string> {
     const imageIds = draft.imageIds.filter((x) => !removed.has(x))
     const pdfIds = draft.pdfIds.filter((x) => !removed.has(x))
 
+    // Renumber `order` to match the saved sequence. Reads sort by it, so
+    // without this the gallery drifts out of order after adds and removals.
+    const ordered = [...imageIds, ...pdfIds]
+    const rows = await db.media.where('poemId').equals(id).toArray()
+    const updates = rows
+      .map((m) => ({ row: m, next: ordered.indexOf(m.id) }))
+      .filter(({ row, next }) => next >= 0 && row.order !== next)
+    for (const { row, next } of updates) {
+      await db.media.update(row.id, { order: next })
+    }
+
     const authorId = await ensureAuthorId(draft.authorName)
 
     const poem: Poem = {
@@ -73,10 +84,6 @@ export async function savePoem(input: SavePoemInput): Promise<string> {
     await db.poems.put(poem)
     return id
   })
-}
-
-export function getPoem(id: string): Promise<Poem | undefined> {
-  return db.poems.get(id)
 }
 
 export async function getPoemWithMedia(id: string): Promise<PoemWithMedia | undefined> {
@@ -133,11 +140,6 @@ export async function setBookmark(id: string, bookmark: number | undefined): Pro
   await db.poems.update(id, { bookmark })
 }
 
-/** All poems, minimal use — prefer the reactive hooks for lists. */
-export function allPoems(): Promise<Poem[]> {
-  return db.poems.toArray()
-}
-
 /* ----------------------------------------------------------------------- */
 /* Authors & collections                                                    */
 /* ----------------------------------------------------------------------- */
@@ -153,29 +155,6 @@ async function ensureAuthorId(name?: string): Promise<string | undefined> {
   const author: Author = { id: newId('auth'), name: trimmed, createdAt: now, updatedAt: now }
   await db.authors.put(author)
   return author.id
-}
-
-export function listAuthors(): Promise<Author[]> {
-  return db.authors.orderBy('name').toArray()
-}
-
-export async function saveAuthor(author: Partial<Author> & { name: string }): Promise<string> {
-  const now = Date.now()
-  const id = author.id ?? newId('auth')
-  const existing = author.id ? await db.authors.get(author.id) : undefined
-  await db.authors.put({
-    id,
-    name: author.name.trim(),
-    nameUrdu: author.nameUrdu,
-    bio: author.bio,
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
-  })
-  return id
-}
-
-export function listCollections(): Promise<Collection[]> {
-  return db.collections.orderBy('name').toArray()
 }
 
 export async function saveCollection(
@@ -224,9 +203,16 @@ export async function getSettings(): Promise<AppSettings> {
   return { ...DEFAULT_SETTINGS, ...(s ?? {}) }
 }
 
+/**
+ * Merge a patch into the settings row inside a transaction. Read-modify-write
+ * outside one would let two quick changes (e.g. font size then theme) race,
+ * with the slower write silently reverting the faster one.
+ */
 export async function saveSettings(patch: Partial<AppSettings>): Promise<void> {
-  const current = await getSettings()
-  await db.settings.put({ ...current, ...patch, key: 'app' })
+  await db.transaction('rw', db.settings, async () => {
+    const current = (await db.settings.get('app')) ?? DEFAULT_SETTINGS
+    await db.settings.put({ ...DEFAULT_SETTINGS, ...current, ...patch, key: 'app' })
+  })
 }
 
 /* ----------------------------------------------------------------------- */
@@ -243,7 +229,10 @@ export async function findDuplicateGroups(): Promise<DuplicateGroup[]> {
   const poems = await db.poems.toArray()
   const byHash = new Map<string, Poem[]>()
   for (const p of poems) {
-    if (!p.contentHash) continue
+    // Poems with no text yet (image-only scans awaiting OCR) all normalise to
+    // the same empty hash. Grouping them would tell the user to delete entirely
+    // unrelated poems, so they are never treated as duplicates.
+    if (!p.contentHash || !p.text?.trim()) continue
     const list = byHash.get(p.contentHash) ?? []
     list.push(p)
     byHash.set(p.contentHash, list)

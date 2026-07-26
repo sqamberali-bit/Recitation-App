@@ -18,6 +18,9 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const resolver = useRef<(v: boolean) => void>()
 
   const confirm = useCallback<ConfirmFn>((options) => {
+    // Resolve any dialog still awaiting an answer, so a caller that opened one
+    // and then unmounted never leaves a promise (and its `await`) hanging.
+    resolver.current?.(false)
     setOpts(options)
     return new Promise<boolean>((resolve) => {
       resolver.current = resolve

@@ -136,6 +136,8 @@ export interface AppSettings {
   keepAwake: boolean
   /** Optional runtime overrides for integrations (see docs). */
   syncEndpoint?: string
+  /** Credential for the sync endpoint only — never the AI key. */
+  syncKey?: string
   aiCorrectionEndpoint?: string
   aiCorrectionKey?: string
   lastBackupAt?: number
@@ -176,5 +178,6 @@ export interface LibraryQuery {
   category?: string | null
   tag?: string | null
   favouritesOnly?: boolean
-  sort?: 'recent' | 'title' | 'created' | 'views'
+  /** `relevance` only applies while a search term is present. */
+  sort?: 'relevance' | 'recent' | 'title' | 'created' | 'views'
 }

@@ -6,12 +6,17 @@ import type { Language } from '@/types'
 
 // Arabic / Urdu script blocks: Arabic (0600–06FF), Supplement (0750–077F),
 // Extended-A (08A0–08FF), Presentation Forms-A (FB50–FDFF) & B (FE70–FEFF).
-const ARABIC_RE = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/
-const ARABIC_GLOBAL = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/g
+const ARABIC_RE =
+  /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFC]/
+const ARABIC_GLOBAL =
+  /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFC]/g
 const LATIN_GLOBAL = /[A-Za-z]/g
 
 // Harakat (short vowels), superscript alef, and tatweel — removed for matching.
-const DIACRITICS_RE = /[ؐ-ًؚ-ٰٟۖ-ۭـ]/g
+const DIACRITICS_RE = /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g
+
+// Zero-width joiners/non-joiners, bidi controls, and the BOM.
+const ZERO_WIDTH_RE = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g
 
 /** True if the text contains any Arabic-script characters. */
 export function hasArabicScript(text: string): boolean {
@@ -51,11 +56,10 @@ export function normalizeForHash(text: string): string {
     .replace(/[ىي]/g, 'ی')
     // Arabic kaf -> Urdu keheh
     .replace(/ك/g, 'ک')
-    // Teh marbuta / heh goal variants -> heh
-    .replace(/[ةہۃ]/g, 'ه')
-    // Remove zero-width joiners/marks
+    // Teh marbuta / heh goal / heh-with-yeh variants -> heh
+    .replace(/[ةہۀۃ]/g, 'ه')
     // Zero-width joiners/non-joiners, bidi marks, and BOM.
-    .replace(/[​-‏‪-‮⁦-⁩﻿]/g, '')
+    .replace(ZERO_WIDTH_RE, '')
     // Punctuation (both scripts) -> space
     .replace(/[\p{P}\p{S}]/gu, ' ')
     .replace(/\s+/g, ' ')
@@ -63,18 +67,27 @@ export function normalizeForHash(text: string): string {
     .toLowerCase()
 }
 
-/** Deterministic 64-bit FNV-1a hash rendered as hex. Sync and dependency-free. */
+/**
+ * Deterministic 64-bit hash rendered as hex. Sync and dependency-free.
+ *
+ * Both lanes consume the FULL char code with different seeds and multipliers.
+ * (An earlier version fed the low byte to one lane and the high byte to the
+ * other; for single-script text the high byte is near-constant, so that lane
+ * carried almost no entropy and the effective hash was only 32 bits — enough
+ * for false duplicate matches in a library of a few thousand poems.)
+ */
 export function hashString(str: string): string {
-  // Two 32-bit lanes to approximate 64-bit without BigInt overhead.
   let h1 = 0x811c9dc5
-  let h2 = 0x811c9dc5
+  let h2 = 0xc9dc5118
   for (let i = 0; i < str.length; i++) {
     const c = str.charCodeAt(i)
-    h1 ^= c & 0xff
-    h1 = Math.imul(h1, 0x01000193)
-    h2 ^= (c >> 8) & 0xff
-    h2 = Math.imul(h2, 0x01000193)
+    h1 = Math.imul(h1 ^ c, 0x01000193)
+    h2 = Math.imul(h2 ^ c, 0x85ebca6b)
+    // Cross-feed so the lanes don't evolve independently.
+    h2 ^= h1 >>> 13
   }
+  h1 ^= h2 >>> 16
+  h2 ^= h1 >>> 16
   const hex = (n: number) => (n >>> 0).toString(16).padStart(8, '0')
   return hex(h1) + hex(h2)
 }
@@ -92,10 +105,13 @@ export function normalizeToken(term: string): string {
   return term
     .normalize('NFC')
     .replace(DIACRITICS_RE, '')
+    // Text pasted from OneNote/Word is riddled with zero-width joiners and bidi
+    // marks. Left in, they make otherwise identical Urdu words unsearchable.
+    .replace(ZERO_WIDTH_RE, '')
     .replace(/[آأإٱ]/g, 'ا')
     .replace(/[ىي]/g, 'ی')
     .replace(/ك/g, 'ک')
-    .replace(/[ةہۃ]/g, 'ه')
+    .replace(/[ةہۀۃ]/g, 'ه')
     .toLowerCase()
 }
 
@@ -114,13 +130,6 @@ export function excerpt(text: string, n = 120): string {
   return base.length > n ? base.slice(0, n).trimEnd() + '…' : base
 }
 
-/** Word count that works for both space-separated scripts. */
-export function countWords(text: string): number {
-  const t = text.trim()
-  if (!t) return 0
-  return t.split(/\s+/).length
-}
-
 /** Tokenise free-form tag/topic input ("a, b؛ c" -> ["a","b","c"]). */
 export function splitList(input: string): string[] {
   return Array.from(
@@ -131,6 +140,23 @@ export function splitList(input: string): string[] {
         .filter(Boolean),
     ),
   )
+}
+
+/**
+ * Coerce untrusted input into a clean string array.
+ *
+ * Imported JSON and restored backups are user-supplied: a field typed as
+ * `string[]` may arrive as a bare string, null, or nested junk. Persisting a
+ * non-array into a multi-entry index is accepted by IndexedDB but breaks every
+ * consumer that calls array methods on it, so everything entering the database
+ * is normalised through here.
+ */
+export function asStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((v): v is string => typeof v === 'string' && v.trim().length > 0).map((v) => v.trim())
+  }
+  if (typeof value === 'string') return splitList(value)
+  return []
 }
 
 /** Human-readable byte size. */

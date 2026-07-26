@@ -23,7 +23,9 @@ async function resolveTarget(): Promise<SyncTarget | null> {
   const s = await getSettings()
   const endpoint = s.syncEndpoint?.trim()
   if (!endpoint) return null
-  return { endpoint, apiKey: s.aiCorrectionKey }
+  // Deliberately NOT the Claude key: sending an AI credential to the user's
+  // storage endpoint would leak it to an unrelated third party.
+  return { endpoint, apiKey: s.syncKey?.trim() || undefined }
 }
 
 /** Upload a full snapshot to the configured endpoint. */

@@ -218,6 +218,15 @@ export function SettingsPage() {
           </p>
         </div>
         {settings.syncEndpoint && (
+          <div className="field">
+            <label>Sync access token (optional)</label>
+            <input className="input" type="password" value={settings.syncKey ?? ''} autoComplete="off"
+              placeholder="Sent as: Authorization: Bearer …"
+              onChange={(e) => void update({ syncKey: e.target.value })} />
+            <p className="hint">Only sent to the endpoint above. Separate from your AI key.</p>
+          </div>
+        )}
+        {settings.syncEndpoint && (
           <div className="row-flex gap-3" style={{ marginBottom: 8 }}>
             <button className="btn btn--ghost btn--block" onClick={doPush} disabled={!!busy}>
               <IconCloud /> {busy === 'push' ? 'Backing up…' : 'Back up now'}

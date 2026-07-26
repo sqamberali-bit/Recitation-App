@@ -15,6 +15,7 @@ import {
   IconClose,
   IconFile,
 } from '@/components/icons'
+import { useObjectUrl } from '@/components/BlobImage'
 import { getPoemWithMedia, recordView, setBookmark, toggleFavourite } from '@/db/repository'
 import { useSettings } from '@/store/settings'
 import { useToast } from '@/components/Toast'
@@ -45,7 +46,10 @@ export function ReaderPage() {
   const [showControls, setShowControls] = useState(false)
   const [autoScroll, setAutoScroll] = useState(false)
   const [showSpeed, setShowSpeed] = useState(false)
-  const [lightbox, setLightbox] = useState<string | null>(null)
+  // Hold the Blob, not a borrowed URL: the URL created inside ReaderImage is
+  // revoked whenever the live query hands back a new Blob instance, which would
+  // blank the lightbox while it is still open.
+  const [lightbox, setLightbox] = useState<Blob | null>(null)
   const [resumeAt, setResumeAt] = useState<number | null>(null)
 
   useWakeLock(settings.keepAwake)
@@ -55,10 +59,15 @@ export function ReaderPage() {
     if (id) void recordView(id)
   }, [id])
 
-  // Offer to resume from a saved bookmark.
+  // Offer to resume from a saved bookmark — once per poem, on first load only.
+  // Depending on `bookmark` would re-show the pill every time we save progress.
+  const offeredForRef = useRef<string | null>(null)
   useEffect(() => {
-    if (data?.poem.bookmark && data.poem.bookmark > 0.02) setResumeAt(data.poem.bookmark)
-  }, [data?.poem.id, data?.poem.bookmark])
+    const poem = data?.poem
+    if (!poem || offeredForRef.current === poem.id) return
+    offeredForRef.current = poem.id
+    if (poem.bookmark && poem.bookmark > 0.02) setResumeAt(poem.bookmark)
+  }, [data?.poem])
 
   /* ---------------- auto-scroll ---------------- */
   useEffect(() => {
@@ -138,13 +147,18 @@ export function ReaderPage() {
     }
   }
 
-  // Keep state in sync if the user exits fullscreen via the browser/ESC.
+  // Keep state in sync if the user exits fullscreen via the browser/ESC, and
+  // always leave fullscreen when the reader unmounts — otherwise the library
+  // screen would stay full-screen with no way to tell why.
   useEffect(() => {
     const onFsChange = () => {
       if (!document.fullscreenElement) setImmersive(false)
     }
     document.addEventListener('fullscreenchange', onFsChange)
-    return () => document.removeEventListener('fullscreenchange', onFsChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange)
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
+    }
   }, [])
 
   /* ---------------- keyboard shortcuts ---------------- */
@@ -318,36 +332,45 @@ export function ReaderPage() {
         </button>
       </div>
 
-      {lightbox && (
-        <div className="lightbox" onClick={() => setLightbox(null)}>
-          <button className="iconbtn lightbox__close" aria-label="Close"><IconClose /></button>
-          <img src={lightbox} alt="Poem scan" />
-        </div>
-      )}
+      {lightbox && <Lightbox blob={lightbox} onClose={() => setLightbox(null)} />}
     </div>
   )
 }
 
 /* --------------------------------------------------------------------- */
 
-function ReaderImage({ blob, onOpen }: { blob: Blob; onOpen: (url: string) => void }) {
-  const [url, setUrl] = useState<string>()
-  useEffect(() => {
-    const u = URL.createObjectURL(blob)
-    setUrl(u)
-    return () => URL.revokeObjectURL(u)
-  }, [blob])
+function ReaderImage({ blob, onOpen }: { blob: Blob; onOpen: (blob: Blob) => void }) {
+  const url = useObjectUrl(blob)
   if (!url) return <div className="skeleton" style={{ height: 200 }} />
-  return <img className="reader__image" src={url} alt="Poem scan" loading="lazy" onClick={() => onOpen(url)} />
+  return <img className="reader__image" src={url} alt="Poem scan" loading="lazy" onClick={() => onOpen(blob)} />
+}
+
+/** Full-screen image viewer that owns its own object URL for its lifetime. */
+function Lightbox({ blob, onClose }: { blob: Blob; onClose: () => void }) {
+  const url = useObjectUrl(blob)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onClose()
+      }
+    }
+    // Capture phase so the reader's own Escape handler doesn't navigate away
+    // while the lightbox is open.
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [onClose])
+
+  return (
+    <div className="lightbox" onClick={onClose} role="dialog" aria-modal="true">
+      <button className="iconbtn lightbox__close" aria-label="Close"><IconClose /></button>
+      {url && <img src={url} alt="Poem scan" />}
+    </div>
+  )
 }
 
 function PdfLink({ name, blob }: { name: string; blob: Blob }) {
-  const [url, setUrl] = useState<string>()
-  useEffect(() => {
-    const u = URL.createObjectURL(blob)
-    setUrl(u)
-    return () => URL.revokeObjectURL(u)
-  }, [blob])
+  const url = useObjectUrl(blob)
   return (
     <a className="row" href={url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
       <IconFile />
