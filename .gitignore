@@ -39,3 +39,6 @@ pnpm-debug.log*
 
 # Test artifacts
 /test-results
+
+# TypeScript incremental build cache
+*.tsbuildinfo
