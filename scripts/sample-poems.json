@@ -1,0 +1,73 @@
+[
+  {
+    "title": "Ya Hussain",
+    "titleNative": "یا حسینؑ",
+    "text": "سلام اُس پر کہ جس نے دینِ حق کو زندگی بخشی\nسلام اُس پر کہ جس نے تشنہ لب جامِ شہادت پیا\nسلام اُس پر کہ جس کا سر نیزے پہ بھی قرآں پڑھتا رہا\nسلام اُس پر کہ کربل میں وفا کا نام روشن ہو گیا",
+    "language": "ur",
+    "kind": "noha",
+    "author": "Anonymous",
+    "category": "Muharram",
+    "topics": ["Karbala", "Shahadat"],
+    "occasions": ["Ashura"],
+    "tags": ["classic", "majlis"]
+  },
+  {
+    "title": "Sakina ki Sada",
+    "titleNative": "سکینہؑ کی صدا",
+    "text": "بابا مجھے پانی نہیں چاہیے\nبس ایک بار آ کے مجھے دیکھ لیجیے\nخیمے جلے ہیں اور ردا بھی نہیں رہی\nزینبؑ کی گود میں سکینہؑ سو گئی",
+    "language": "ur",
+    "kind": "noha",
+    "author": "Anonymous",
+    "category": "Muharram",
+    "topics": ["Sakina", "Karbala"],
+    "occasions": ["Shab-e-Ashura"],
+    "tags": ["emotional", "majlis"]
+  },
+  {
+    "title": "Salam-e-Akhir",
+    "titleNative": "سلامِ آخر",
+    "text": "اے شاہِ شہیداں تجھے لاکھوں سلام\nاے صبر کے عنواں تجھے لاکھوں سلام\nتُو نے جو دیا درسِ وفا کربل میں\nاے دینِ محمدؐ تجھے لاکھوں سلام",
+    "language": "ur",
+    "kind": "salam",
+    "author": "Mir Anees",
+    "category": "Muharram",
+    "topics": ["Imam Hussain"],
+    "occasions": ["Arbaeen"],
+    "tags": ["salam"]
+  },
+  {
+    "title": "The Standard Bearer",
+    "text": "He carried water, not a sword that day,\nAnd both his arms were taken on the way.\nYet still he held the standard to the sky —\nAbbas, who taught the world how not to die.",
+    "language": "en",
+    "kind": "poem",
+    "author": "Contemporary",
+    "category": "Muharram",
+    "topics": ["Abbas", "Loyalty"],
+    "occasions": ["Ashura"],
+    "tags": ["english", "translation"]
+  },
+  {
+    "title": "Manqabat-e-Ali",
+    "titleNative": "منقبتِ علیؑ",
+    "text": "علیؑ کا نام لے کر جو بھی چلتا ہے سنبھلتا ہے\nیہ وہ در ہے جہاں ہر مشکل آسان ہو جاتی ہے\nنہ پوچھو مرتبہ اُس کا جسے مولا کہا حق نے\nعلیؑ کی مدح میں ہر لفظ قرآں ہو جاتا ہے",
+    "language": "ur",
+    "kind": "manqabat",
+    "author": "Anonymous",
+    "category": "Wiladat",
+    "topics": ["Imam Ali"],
+    "occasions": ["13 Rajab"],
+    "tags": ["manqabat", "joyful"]
+  },
+  {
+    "title": "Dua-e-Faraj",
+    "titleNative": "دعائے فرج",
+    "text": "اَللّٰهُمَّ صَلِّ عَلٰى مُحَمَّدٍ وَّآلِ مُحَمَّد\nوَعَجِّلْ فَرَجَهُمْ",
+    "translation": "O Allah, send blessings upon Muhammad and the family of Muhammad, and hasten their relief.",
+    "language": "ar",
+    "kind": "dua",
+    "category": "Daily",
+    "topics": ["Dua"],
+    "occasions": ["Everyday"],
+    "tags": ["short", "daily"]
+  }
+]

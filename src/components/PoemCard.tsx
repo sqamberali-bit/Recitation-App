@@ -1,0 +1,89 @@
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { IconStarFill, IconImage, IconClock } from './icons'
+import { directionOf, excerpt } from '@/lib/text'
+import { getMedia, toggleFavourite } from '@/db/repository'
+import type { Poem } from '@/types'
+
+/** Lazily load a poem's first-image thumbnail (only for mounted cards). */
+function useThumb(id?: string): Blob | undefined {
+  const [blob, setBlob] = useState<Blob>()
+  useEffect(() => {
+    if (!id) {
+      setBlob(undefined)
+      return
+    }
+    let alive = true
+    getMedia(id).then((m) => {
+      if (alive) setBlob(m?.thumbnail ?? m?.blob)
+    })
+    return () => {
+      alive = false
+    }
+  }, [id])
+  return blob
+}
+
+function Thumb({ blob }: { blob: Blob | undefined }) {
+  const [url, setUrl] = useState<string>()
+  useEffect(() => {
+    if (!blob) return
+    const u = URL.createObjectURL(blob)
+    setUrl(u)
+    return () => URL.revokeObjectURL(u)
+  }, [blob])
+  if (!url) return null
+  return <img className="card__thumb" src={url} alt="" loading="lazy" />
+}
+
+export function PoemCard({ poem }: { poem: Poem }) {
+  const navigate = useNavigate()
+  const thumb = useThumb(poem.imageIds[0])
+  const displayTitle = poem.titleNative || poem.title
+  const titleRtl = directionOf(displayTitle) === 'rtl'
+  const bodyRtl = directionOf(poem.text) === 'rtl'
+  const preview = excerpt(poem.text, 100)
+
+  return (
+    <div className="card" onClick={() => navigate(`/poem/${poem.id}`)} role="button" tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && navigate(`/poem/${poem.id}`)}>
+      {poem.favourite && <IconStarFill className="card__star" width={18} />}
+      <div className="card__top">
+        <span className="card__kind">{poem.kind}</span>
+      </div>
+      {thumb && <Thumb blob={thumb} />}
+      <div className={`card__title ${titleRtl ? 'card__title--urdu' : ''}`} dir={titleRtl ? 'rtl' : 'ltr'}>
+        {displayTitle}
+      </div>
+      <div className={`card__excerpt ${bodyRtl ? 'card__excerpt--urdu' : ''}`} dir={bodyRtl ? 'rtl' : 'ltr'}>
+        {preview}
+      </div>
+      <div className="card__meta">
+        {poem.authorName && <span>{poem.authorName}</span>}
+        {poem.authorName && <span className="card__dot" />}
+        {poem.imageIds.length > 0 && (
+          <span className="row-flex" style={{ gap: 3 }}>
+            <IconImage width={13} /> {poem.imageIds.length}
+          </span>
+        )}
+        {poem.viewCount > 0 && (
+          <span className="row-flex" style={{ gap: 3 }}>
+            <IconClock width={13} /> {poem.viewCount}
+          </span>
+        )}
+        <span className="spacer" />
+        <button
+          className="iconbtn"
+          style={{ width: 30, height: 30 }}
+          onClick={(e) => {
+            e.stopPropagation()
+            void toggleFavourite(poem.id)
+          }}
+          aria-label={poem.favourite ? 'Remove favourite' : 'Add favourite'}
+        >
+          <IconStarFill width={16} style={{ color: poem.favourite ? 'var(--star)' : 'var(--text-3)' }} />
+        </button>
+      </div>
+    </div>
+  )
+}

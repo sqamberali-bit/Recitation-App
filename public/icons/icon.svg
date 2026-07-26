@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Recitation app icon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#0b3b39"/>
+    </linearGradient>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fdfcf7"/>
+      <stop offset="1" stop-color="#efe9d8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- rehal (book stand) legs -->
+  <path d="M150 356 L256 300 L362 356 L256 300 Z" fill="none" stroke="#d9a441" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M150 356 L256 412 M362 356 L256 412" fill="none" stroke="#d9a441" stroke-width="14" stroke-linecap="round"/>
+  <!-- open book -->
+  <path d="M256 150 C214 128 168 126 128 140 L128 300 C168 286 214 288 256 310 Z" fill="url(#page)" stroke="#c9b98f" stroke-width="6"/>
+  <path d="M256 150 C298 128 344 126 384 140 L384 300 C344 286 298 288 256 310 Z" fill="url(#page)" stroke="#c9b98f" stroke-width="6"/>
+  <!-- text lines -->
+  <g stroke="#0f766e" stroke-width="8" stroke-linecap="round" opacity="0.75">
+    <path d="M160 176 H232"/>
+    <path d="M160 208 H232"/>
+    <path d="M160 240 H216"/>
+    <path d="M280 176 H352"/>
+    <path d="M280 208 H352"/>
+    <path d="M296 240 H352"/>
+  </g>
+  <!-- spine -->
+  <path d="M256 150 L256 310" stroke="#c9b98f" stroke-width="6"/>
+</svg>
