@@ -115,15 +115,21 @@ npm run test:e2e     # end-to-end browser tests (needs `npm run preview` running
 
 ### Deploying
 
-`dist/` is a static bundle — host it anywhere (Netlify, Vercel, Cloudflare Pages, GitHub Pages,
-or your own server). Two requirements:
+**→ See [`docs/DEPLOY.md`](docs/DEPLOY.md) for step-by-step Cloudflare Pages setup.** The repo
+already contains the SPA fallback (`public/_redirects`), cache headers (`public/_headers`), and a
+pinned Node version, so it's a connect-the-repo-and-deploy job.
+
+`dist/` is a plain static bundle, so any host works. Two requirements:
 
 1. **Serve over HTTPS.** Service workers, the camera, and Wake Lock all require a secure context
    (`localhost` is exempt for development).
 2. **SPA fallback.** Rewrite unknown paths to `index.html` so deep links like `/poem/abc` work.
 
 Then open the site on your phone and choose **Add to Home Screen** (Android: Chrome's install
-prompt; iOS: Share → Add to Home Screen).
+prompt; iOS: Share → Add to Home Screen — it must be Safari).
+
+> Note: a project-style GitHub Pages URL (`user.github.io/Recitation-App/`) also needs Vite's
+> `base` set to `/Recitation-App/` and the manifest `scope`/`start_url` updated to match.
 
 ---
 

@@ -1,0 +1,32 @@
+# Cloudflare Pages response headers.
+
+# Build assets carry a content hash in their filename, so they can be cached
+# permanently — this is what makes repeat launches instant.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The service worker must NOT be cached, or the browser keeps serving the old
+# one and users never receive updates.
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/registerSW.js
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/manifest.webmanifest
+  Cache-Control: no-cache
+  Content-Type: application/manifest+json
+
+# Baseline security headers. No CSP is set here because the app loads OCR
+# language data from a CDN at runtime; add one if you disable OCR.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), interest-cohort=()

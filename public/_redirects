@@ -1,0 +1,6 @@
+# Cloudflare Pages SPA fallback.
+# Static files (assets, sw.js, manifest, fonts) are matched first and served
+# directly; anything left over is a client-side route like /poem/<id> and must
+# return index.html with a 200 so React Router can handle it. Using a 200 here
+# rather than a redirect keeps the URL intact.
+/*    /index.html   200
