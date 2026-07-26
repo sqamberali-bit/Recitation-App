@@ -57,7 +57,7 @@ export function normalizeForHash(text: string): string {
     // Arabic kaf -> Urdu keheh
     .replace(/ك/g, 'ک')
     // Teh marbuta / heh goal / heh-with-yeh variants -> heh
-    .replace(/[ةہۀۃ]/g, 'ه')
+    .replace(/[ةہۀۂۃ]/g, 'ه')
     // Zero-width joiners/non-joiners, bidi marks, and BOM.
     .replace(ZERO_WIDTH_RE, '')
     // Punctuation (both scripts) -> space
@@ -111,7 +111,7 @@ export function normalizeToken(term: string): string {
     .replace(/[آأإٱ]/g, 'ا')
     .replace(/[ىي]/g, 'ی')
     .replace(/ك/g, 'ک')
-    .replace(/[ةہۀۃ]/g, 'ه')
+    .replace(/[ةہۀۂۃ]/g, 'ه')
     .toLowerCase()
 }
 

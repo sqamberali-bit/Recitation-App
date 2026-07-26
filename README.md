@@ -207,8 +207,41 @@ OneNote has no clean bulk export, so the app supports three practical paths (**S
 Import poems**):
 
 1. **Paste text** — copy pages from OneNote and paste them all at once, separating poems with a
-   line of `---`. The first line of each block becomes the title. A JSON array is also accepted
-   for scripted migrations.
+   line of `---` (or `===`) on its own:
+
+   ```
+   Ya Hussain
+   سلام اُس پر کہ جس نے دینِ حق کو زندگی بخشی
+   سلام اُس پر کہ جس نے تشنہ لب جامِ شہادت پیا
+
+   ---
+
+   Sakina ki Sada
+   بابا مجھے پانی نہیں چاہیے
+   ```
+
+   A short first line is used as the title; a long one is treated as an opening verse and kept
+   in the poem, so nothing is ever silently dropped. Language is detected automatically.
+
+   A JSON array is also accepted for scripted migrations:
+
+   ```json
+   [
+     {
+       "title": "Ya Hussain",
+       "text": "سلام اُس پر…",
+       "author": "Mir Anees",
+       "kind": "noha",
+       "category": "Muharram",
+       "collections": ["Ashura Night"],
+       "topics": ["Karbala"],
+       "occasions": ["Ashura"],
+       "tags": ["majlis"]
+     }
+   ]
+   ```
+
+   Only `text` is required; collections are created automatically if they don't exist.
 2. **Photos & scans** — export or screenshot your OneNote pages, then select them all at once.
    Each image becomes a poem with the picture attached and the filename as the title. You can
    then run OCR on each to extract the text.
@@ -247,10 +280,15 @@ npm run preview          # terminal 1
 npm run test:e2e         # terminal 2
 ```
 
-The suite drives a real Chromium browser through 29 checks covering import, Urdu and English
-search, favourites, reader scrolling/auto-scroll/bookmarks/fonts, the editor, duplicate
-detection, theming and persistence, export, browse drill-down, service-worker registration,
-**true offline operation**, the responsive desktop layout, and manifest installability.
+Three suites drive a real Chromium browser through 40 checks:
+
+| Suite | Covers |
+|---|---|
+| `tests/e2e.mjs` | Import, Urdu & English search, favourites, reader (scrolling, auto-scroll, bookmarks, fonts), editor, duplicate detection, theming and persistence, export, browse drill-down, service worker, **true offline operation**, responsive desktop layout, manifest installability |
+| `tests/malformed-import.mjs` | Malformed imported JSON cannot corrupt the library or brick the app |
+| `tests/editor-safety.mjs` | Creating a new poem after editing one never overwrites the original |
+
+The last two are regression tests for real bugs found during review — see the git history.
 
 ---
 

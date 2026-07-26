@@ -76,7 +76,9 @@
 
 /* Image gallery inside the reader */
 .reader__images { margin-top: var(--space-6); display: flex; flex-direction: column; gap: 14px; }
-.reader__image { width: 100%; border-radius: var(--radius); border: 1px solid var(--border); cursor: zoom-in; }
+/* `height: auto` keeps the intrinsic width/height attributes working as an
+   aspect-ratio hint without letting them fix the rendered size. */
+.reader__image { width: 100%; height: auto; border-radius: var(--radius); border: 1px solid var(--border); cursor: zoom-in; }
 
 /* Bottom control dock (font size, autoscroll, etc.) */
 .reader__dock {

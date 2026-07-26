@@ -33,8 +33,15 @@ Set **Settings → Cloud backup → Sync endpoint** to any URL that supports:
 - `PUT` with a `application/zip` body → store the snapshot
 - `GET` → return the stored snapshot
 
-Then **Back up now** uploads, and **Restore** pulls it down and replaces the local library. If
-you fill in the API-key field it is sent as `Authorization: Bearer <key>`.
+Then **Back up now** uploads, and **Restore** pulls it down and replaces the local library.
+
+If your endpoint needs authentication, set a **Sync access token** (it appears once an endpoint
+is configured). It is sent as `Authorization: Bearer <token>` **to that endpoint only**. This is
+deliberately separate from the Claude API key — an AI credential must never be sent to your
+storage provider.
+
+Exported backups never contain your sync endpoint, AI endpoint, or any key, so a backup shared
+with family cannot leak them.
 
 **Important:** this is *snapshot* sync, not merge sync. Restoring replaces the device's library
 with the cloud copy. Use it as backup + device transfer, and avoid editing on two devices

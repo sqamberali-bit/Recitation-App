@@ -270,7 +270,13 @@ export function ReaderPage() {
             <div className="reader__images">
               <div className="reader__section-label">Scans & photos</div>
               {data.images.map((img) => (
-                <ReaderImage key={img.id} blob={img.blob} onOpen={setLightbox} />
+                <ReaderImage
+                  key={img.id}
+                  blob={img.blob}
+                  width={img.width}
+                  height={img.height}
+                  onOpen={setLightbox}
+                />
               ))}
             </div>
           )}
@@ -339,10 +345,35 @@ export function ReaderPage() {
 
 /* --------------------------------------------------------------------- */
 
-function ReaderImage({ blob, onOpen }: { blob: Blob; onOpen: (blob: Blob) => void }) {
+function ReaderImage({
+  blob,
+  width,
+  height,
+  onOpen,
+}: {
+  blob: Blob
+  width?: number
+  height?: number
+  onOpen: (blob: Blob) => void
+}) {
   const url = useObjectUrl(blob)
-  if (!url) return <div className="skeleton" style={{ height: 200 }} />
-  return <img className="reader__image" src={url} alt="Poem scan" loading="lazy" onClick={() => onOpen(blob)} />
+  // Publishing the intrinsic size lets the browser reserve the right space
+  // before the image decodes. Without it the page grows as scans load, which
+  // shifts the text under the reader's finger and skews the saved bookmark.
+  const ratio = width && height ? { aspectRatio: `${width} / ${height}` } : undefined
+  if (!url) return <div className="skeleton" style={{ height: 200, ...ratio }} />
+  return (
+    <img
+      className="reader__image"
+      src={url}
+      alt="Poem scan"
+      loading="lazy"
+      width={width}
+      height={height}
+      style={ratio}
+      onClick={() => onOpen(blob)}
+    />
+  )
 }
 
 /** Full-screen image viewer that owns its own object URL for its lifetime. */

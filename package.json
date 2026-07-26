@@ -12,7 +12,7 @@
     "typecheck": "tsc -b --noEmit",
     "gen:icons": "node scripts/gen-icons.mjs",
     "fetch:fonts": "node scripts/fetch-fonts.mjs",
-    "test:e2e": "node tests/e2e.mjs"
+    "test:e2e": "node tests/e2e.mjs && node tests/malformed-import.mjs && node tests/editor-safety.mjs"
   },
   "dependencies": {
     "dexie": "^4.0.10",

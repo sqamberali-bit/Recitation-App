@@ -12,7 +12,7 @@
 import { zip, unzip, strToU8, strFromU8, type Unzipped } from 'fflate'
 import { db } from '@/db/database'
 import { newId } from './id'
-import { asStringArray, contentHash, detectLanguage } from './text'
+import { asStringArray, contentHash, detectLanguage, excerpt } from './text'
 import type {
   Author,
   Collection,
@@ -151,6 +151,15 @@ export async function importLibrary(
   const manifestBytes = out['library.json']
   if (!manifestBytes) throw new Error('Not a valid Recitation backup (missing library.json)')
   const manifest = JSON.parse(strFromU8(manifestBytes)) as Archive
+
+  // Refuse archives written by a newer release rather than silently importing
+  // records this version does not understand.
+  if (typeof manifest.version === 'number' && manifest.version > ARCHIVE_VERSION) {
+    throw new Error(
+      `This backup was created by a newer version of the app (format ${manifest.version}). Please update before restoring.`,
+    )
+  }
+
   // An archive is user-supplied data: repair any malformed array fields before
   // they reach the database, where they would break search and list rendering.
   manifest.poems = (manifest.poems ?? []).filter((p) => p && typeof p.id === 'string').map(sanitizePoem)
@@ -158,20 +167,46 @@ export async function importLibrary(
   manifest.collections = (manifest.collections ?? []).filter((c) => c && typeof c.id === 'string')
   manifest.media = (manifest.media ?? []).filter((m) => m && typeof m.id === 'string')
 
-  const media: MediaAsset[] = manifest.media.map((meta) => {
+  // Skip entries whose bytes are missing from the archive: storing a 0-byte
+  // blob would render as a permanently broken image with no way to tell why.
+  const missing: string[] = []
+  const media: MediaAsset[] = manifest.media.flatMap((meta) => {
     const raw = out[`media/${meta.id}`]
+    if (!raw || raw.length === 0) {
+      missing.push(meta.id)
+      return []
+    }
     const thumb = meta.hasThumbnail ? out[`media/${meta.id}.thumb`] : undefined
     const { hasThumbnail: _h, ...rest } = meta
-    return {
-      ...rest,
-      blob: new Blob([toBuffer(raw ?? new Uint8Array())], { type: meta.mime }),
-      thumbnail: thumb ? new Blob([toBuffer(thumb)], { type: 'image/jpeg' }) : undefined,
-    }
+    return [
+      {
+        ...rest,
+        blob: new Blob([toBuffer(raw)], { type: meta.mime }),
+        thumbnail: thumb?.length ? new Blob([toBuffer(thumb)], { type: 'image/jpeg' }) : undefined,
+      },
+    ]
   })
+
+  if (missing.length) {
+    console.warn(`Backup is missing ${missing.length} media file(s); their references were dropped.`)
+    const dropped = new Set(missing)
+    manifest.poems = manifest.poems.map((p) => ({
+      ...p,
+      imageIds: p.imageIds.filter((x) => !dropped.has(x)),
+      pdfIds: p.pdfIds.filter((x) => !dropped.has(x)),
+    }))
+  }
 
   await db.transaction('rw', db.poems, db.authors, db.collections, db.media, db.settings, async () => {
     if (opts.replace) {
       await Promise.all([db.poems.clear(), db.authors.clear(), db.collections.clear(), db.media.clear()])
+    } else {
+      // Merge mode: an incoming poem replaces the local one with the same id,
+      // so its old media rows must go too. Otherwise they linger with a
+      // matching poemId and reappear in the gallery as duplicate images.
+      for (const p of manifest.poems) {
+        await db.media.where('poemId').equals(p.id).delete()
+      }
     }
     await db.authors.bulkPut(manifest.authors)
     await db.collections.bulkPut(manifest.collections)
@@ -211,25 +246,44 @@ export interface SimplePoemInput {
 }
 
 /** Parse bulk-import source text: JSON array, or "==="-separated blocks. */
+/** Longest first line still treated as a title rather than an opening verse. */
+const MAX_TITLE_LINE = 60
+
 export function parseSimpleImport(source: string): SimplePoemInput[] {
   const trimmed = source.trim()
   if (!trimmed) return []
+
+  // JSON mode. Only *accept* the parse if it yields usable records — a poem
+  // that merely happens to start with a bracket must fall through to text mode
+  // rather than failing the whole import with a raw SyntaxError.
   if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
-    const parsed = JSON.parse(trimmed)
-    const arr = Array.isArray(parsed) ? parsed : [parsed]
-    return arr.filter((x) => x && typeof x.text === 'string')
+    try {
+      const parsed = JSON.parse(trimmed)
+      const arr = Array.isArray(parsed) ? parsed : [parsed]
+      const usable = arr.filter((x) => x && typeof x.text === 'string' && x.text.trim())
+      if (usable.length) return usable
+    } catch {
+      /* not JSON after all — treat it as plain text */
+    }
   }
-  // Plain-text mode: poems separated by a line of 3+ '=' or '-'. First line is
-  // treated as the title.
+
+  // Plain-text mode: poems separated by their own line of 3+ '-' or '='.
   return trimmed
-    .split(/\n\s*[=-]{3,}\s*\n/)
+    .split(/\r?\n[ \t]*(?:-{3,}|={3,})[ \t]*(?:\r?\n|$)/)
     .map((block) => block.trim())
     .filter(Boolean)
     .map((block) => {
-      const lines = block.split('\n')
-      const title = lines[0]?.trim()
-      const body = lines.slice(1).join('\n').trim() || block
-      return { title, text: body }
+      const lines = block.split(/\r?\n/)
+      const first = lines[0]?.trim() ?? ''
+      const rest = lines.slice(1).join('\n').trim()
+
+      // Only lift the first line out as a title when it actually reads like
+      // one. Doing it unconditionally would delete the opening verse of every
+      // untitled poem, which is silent data loss on the main import path.
+      if (first && rest && first.length <= MAX_TITLE_LINE) {
+        return { title: first, text: rest }
+      }
+      return { title: excerpt(first || block, MAX_TITLE_LINE), text: block }
     })
 }
 
@@ -239,6 +293,20 @@ export async function importSimplePoems(items: SimplePoemInput[]): Promise<numbe
   const poems: Poem[] = []
   const authorCache = new Map<string, string>()
   const newAuthors: Author[] = []
+  const collectionCache = new Map<string, string>()
+  const newCollections: Collection[] = []
+
+  /** Resolve a collection name to an id, creating it if it's new. */
+  const collectionIdFor = async (name: string): Promise<string> => {
+    const key = name.toLowerCase()
+    const cached = collectionCache.get(key)
+    if (cached) return cached
+    const existing = await db.collections.filter((c) => c.name.toLowerCase() === key).first()
+    const id = existing?.id ?? newId('col')
+    collectionCache.set(key, id)
+    if (!existing) newCollections.push({ id, name, createdAt: now, updatedAt: now })
+    return id
+  }
 
   for (const [index, item] of items.entries()) {
     if (!item.text?.trim()) continue
@@ -255,6 +323,11 @@ export async function importSimplePoems(items: SimplePoemInput[]): Promise<numbe
       }
     }
 
+    const collectionIds: string[] = []
+    for (const name of asStringArray(item.collections)) {
+      collectionIds.push(await collectionIdFor(name))
+    }
+
     poems.push({
       id: newId('poem'),
       title: item.title?.trim() || item.text.trim().split('\n')[0].slice(0, 60),
@@ -266,7 +339,7 @@ export async function importSimplePoems(items: SimplePoemInput[]): Promise<numbe
       kind: item.kind ?? 'noha',
       authorId,
       authorName,
-      collectionIds: [],
+      collectionIds,
       category: item.category,
       // Never trust the shape of imported fields — see `asStringArray`.
       topics: asStringArray(item.topics),
@@ -285,8 +358,9 @@ export async function importSimplePoems(items: SimplePoemInput[]): Promise<numbe
     })
   }
 
-  await db.transaction('rw', db.poems, db.authors, async () => {
+  await db.transaction('rw', db.poems, db.authors, db.collections, async () => {
     if (newAuthors.length) await db.authors.bulkPut(newAuthors)
+    if (newCollections.length) await db.collections.bulkPut(newCollections)
     if (poems.length) await db.poems.bulkPut(poems)
   })
   return poems.length

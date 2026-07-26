@@ -8,14 +8,40 @@ import { BrowsePage } from '@/pages/BrowsePage'
 import { BrowseResultsPage } from '@/pages/BrowseResultsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 
+/**
+ * Lazy-load a route, surviving a deploy that happened while this tab was open.
+ *
+ * The service worker updates in the background, so chunk filenames the running
+ * page knows can 404 afterwards. Rather than showing a crash on the first
+ * navigation after a release, reload once to pick up the new build.
+ */
+function lazyRoute<T extends Record<string, React.ComponentType<unknown>>>(
+  load: () => Promise<T>,
+  name: keyof T,
+) {
+  return lazy(async () => {
+    try {
+      const mod = await load()
+      return { default: mod[name] }
+    } catch (err) {
+      const KEY = 'recitation:chunk-reloaded'
+      if (!sessionStorage.getItem(KEY)) {
+        sessionStorage.setItem(KEY, '1')
+        window.location.reload()
+        // Never resolves; the reload takes over.
+        return new Promise<never>(() => {})
+      }
+      throw err
+    }
+  })
+}
+
 // Heavier, less-frequently used screens are code-split so the first paint on
 // mobile stays fast.
-const ReaderPage = lazy(() => import('@/pages/ReaderPage').then((m) => ({ default: m.ReaderPage })))
-const EditorPage = lazy(() => import('@/pages/EditorPage').then((m) => ({ default: m.EditorPage })))
-const ImportPage = lazy(() => import('@/pages/ImportPage').then((m) => ({ default: m.ImportPage })))
-const DuplicatesPage = lazy(() =>
-  import('@/pages/DuplicatesPage').then((m) => ({ default: m.DuplicatesPage })),
-)
+const ReaderPage = lazyRoute(() => import('@/pages/ReaderPage'), 'ReaderPage')
+const EditorPage = lazyRoute(() => import('@/pages/EditorPage'), 'EditorPage')
+const ImportPage = lazyRoute(() => import('@/pages/ImportPage'), 'ImportPage')
+const DuplicatesPage = lazyRoute(() => import('@/pages/DuplicatesPage'), 'DuplicatesPage')
 
 function Loading() {
   return (
