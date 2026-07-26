@@ -24,6 +24,7 @@ export default defineConfig({
           ocr: ['tesseract.js'],
           search: ['minisearch'],
           db: ['dexie', 'dexie-react-hooks'],
+          msal: ['@azure/msal-browser'],
         },
       },
     },

@@ -42,6 +42,7 @@ const ReaderPage = lazyRoute(() => import('@/pages/ReaderPage'), 'ReaderPage')
 const EditorPage = lazyRoute(() => import('@/pages/EditorPage'), 'EditorPage')
 const ImportPage = lazyRoute(() => import('@/pages/ImportPage'), 'ImportPage')
 const DuplicatesPage = lazyRoute(() => import('@/pages/DuplicatesPage'), 'DuplicatesPage')
+const OneNoteImportPage = lazyRoute(() => import('@/pages/OneNoteImportPage'), 'OneNoteImportPage')
 
 function Loading() {
   return (
@@ -67,6 +68,7 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/editor/:id" element={<EditorPage />} />
           <Route path="/import" element={<ImportPage />} />
+          <Route path="/import/onenote" element={<OneNoteImportPage />} />
           <Route path="/duplicates" element={<DuplicatesPage />} />
         </Route>
 

@@ -24,14 +24,17 @@ export class RecitationDB extends Dexie {
     super('recitation-db')
 
     this.version(1).stores({
-      // NB: `favourite` is intentionally NOT indexed — IndexedDB cannot use a
-      // boolean as a key. Favourites are filtered in memory (see store/).
       poems:
         'id, title, language, kind, authorId, authorName, category, favouritedAt, createdAt, updatedAt, lastViewedAt, viewCount, contentHash, *collectionIds, *tags, *topics, *occasions',
       media: 'id, poemId, type, createdAt',
       authors: 'id, name',
       collections: 'id, name',
       settings: 'key',
+    })
+
+    this.version(2).stores({
+      poems:
+        'id, title, language, kind, authorId, authorName, category, favouritedAt, createdAt, updatedAt, lastViewedAt, viewCount, contentHash, onenoteSourceId, *collectionIds, *tags, *topics, *occasions',
     })
   }
 }

@@ -118,6 +118,13 @@ export interface Poem {
   viewCount: number
   lastViewedAt?: number
 
+  /** OneNote page ID — links back to the source page in Graph API. */
+  onenoteSourceId?: string
+  /** OneNote page lastModifiedDateTime (epoch ms), for change detection. */
+  onenoteLastModified?: number
+  /** Where this poem came from: 'onenote', 'manual', 'import'. */
+  sourceType?: string
+
   createdAt: number
   updatedAt: number
 }

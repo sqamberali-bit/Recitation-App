@@ -218,6 +218,25 @@ export function ImportPage() {
         )}
 
         <div className="divider" />
+        <div
+          className="card"
+          style={{ cursor: 'pointer', marginBottom: 16 }}
+          onClick={() => navigate('/import/onenote')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter') navigate('/import/onenote') }}
+        >
+          <div className="row-flex" style={{ gap: 12 }}>
+            <IconUpload />
+            <div>
+              <div style={{ fontWeight: 600 }}>Import from OneNote</div>
+              <div className="text-sm muted">
+                Connect to your Microsoft account and import notebooks, sections,
+                images, and text automatically.
+              </div>
+            </div>
+          </div>
+        </div>
         <div className="row-flex gap-2 muted text-sm">
           <IconFile width={16} />
           <span>Everything is imported locally on this device — nothing is uploaded.</span>
