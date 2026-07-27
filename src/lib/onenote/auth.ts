@@ -3,6 +3,7 @@ import type { PublicClientApplication, AccountInfo } from '@azure/msal-browser'
 const SCOPES = ['Notes.Read']
 
 let pca: PublicClientApplication | null = null
+let redirectHandled = false
 
 async function getMsal(): Promise<PublicClientApplication> {
   if (pca) return pca
@@ -13,7 +14,7 @@ async function getMsal(): Promise<PublicClientApplication> {
     auth: {
       clientId,
       authority: 'https://login.microsoftonline.com/consumers',
-      redirectUri: window.location.origin + import.meta.env.BASE_URL.replace(/\/$/, ''),
+      redirectUri: window.location.origin + import.meta.env.BASE_URL.replace(/\/$/, '') + '/import/onenote',
     },
     cache: { cacheLocation: 'sessionStorage' },
   })
@@ -21,10 +22,17 @@ async function getMsal(): Promise<PublicClientApplication> {
   return pca
 }
 
-export async function signIn(): Promise<string> {
+export async function handleRedirect(): Promise<boolean> {
+  if (redirectHandled) return false
+  redirectHandled = true
   const msal = await getMsal()
-  const result = await msal.loginPopup({ scopes: SCOPES })
-  return result.accessToken
+  const result = await msal.handleRedirectPromise()
+  return !!result
+}
+
+export async function signIn(): Promise<void> {
+  const msal = await getMsal()
+  await msal.loginRedirect({ scopes: SCOPES })
 }
 
 export async function getToken(): Promise<string> {
@@ -38,8 +46,8 @@ export async function getToken(): Promise<string> {
     })
     return result.accessToken
   } catch {
-    const result = await msal.acquireTokenPopup({ scopes: SCOPES })
-    return result.accessToken
+    await msal.acquireTokenRedirect({ scopes: SCOPES })
+    throw new Error('Redirecting to re-authenticate…')
   }
 }
 
@@ -47,7 +55,7 @@ export async function signOut(): Promise<void> {
   if (!pca) return
   const accounts = pca.getAllAccounts()
   if (accounts.length) {
-    await pca.logoutPopup({ account: accounts[0] })
+    await pca.logoutRedirect({ account: accounts[0] })
   }
   pca = null
 }
