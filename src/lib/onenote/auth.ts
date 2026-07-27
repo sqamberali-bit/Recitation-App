@@ -12,7 +12,7 @@ async function getMsal(): Promise<PublicClientApplication> {
   pca = new PublicClientApplication({
     auth: {
       clientId,
-      authority: 'https://login.microsoftonline.com/common',
+      authority: 'https://login.microsoftonline.com/consumers',
       redirectUri: window.location.origin + import.meta.env.BASE_URL.replace(/\/$/, ''),
     },
     cache: { cacheLocation: 'sessionStorage' },
