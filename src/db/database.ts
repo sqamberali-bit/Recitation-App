@@ -47,6 +47,11 @@ export class RecitationDB extends Dexie {
     this.version(3).stores({
       tombstones: 'id, table, deletedAt',
     })
+
+    this.version(4).stores({
+      authors: 'id, name, updatedAt',
+      collections: 'id, name, updatedAt',
+    })
   }
 }
 
