@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { IconBack, IconCloud, IconClose } from '@/components/icons'
 import { useToast } from '@/components/Toast'
-import { isConfigured, signIn, signOut, getAccount } from '@/lib/onenote/auth'
+import { isConfigured, signIn, signOut, getAccount, handleRedirect } from '@/lib/onenote/auth'
 import { listNotebooks, type OneNoteNotebook } from '@/lib/onenote/client'
 import { runImport, type ImportProgress, type ImportSummary } from '@/lib/onenote/importer'
 import { db } from '@/db/database'
@@ -29,6 +29,31 @@ export function OneNoteImportPage() {
       .filter((p) => !!p.onenoteSourceId)
       .count()
       .then(setPreviousCount)
+
+    if (isConfigured()) {
+      handleRedirect().then(async (didReturn) => {
+        if (didReturn) {
+          setBusy(true)
+          try {
+            const acct = await getAccount()
+            setAccountName(acct?.username ?? acct?.name ?? '')
+            const nbs = await listNotebooks()
+            setNotebooks(nbs)
+            setSelected(new Set(nbs.map((n) => n.id)))
+            setStep('select')
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to load notebooks')
+          } finally {
+            setBusy(false)
+          }
+        } else {
+          const acct = await getAccount()
+          if (acct) {
+            setAccountName(acct.username ?? acct.name ?? '')
+          }
+        }
+      })
+    }
   }, [])
 
   const doConnect = async () => {
@@ -36,15 +61,8 @@ export function OneNoteImportPage() {
     setError('')
     try {
       await signIn()
-      const acct = await getAccount()
-      setAccountName(acct?.username ?? acct?.name ?? '')
-      const nbs = await listNotebooks()
-      setNotebooks(nbs)
-      setSelected(new Set(nbs.map((n) => n.id)))
-      setStep('select')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign-in failed')
-    } finally {
       setBusy(false)
     }
   }

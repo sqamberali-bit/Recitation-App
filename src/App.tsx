@@ -1,5 +1,5 @@
-import { lazy, Suspense } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { lazy, Suspense, useEffect } from 'react'
+import { Navigate, Route, Routes, useNavigate, useLocation } from 'react-router-dom'
 import { AppShell } from '@/components/AppShell'
 import { LibraryPage } from '@/pages/LibraryPage'
 import { FavouritesPage } from '@/pages/FavouritesPage'
@@ -52,9 +52,27 @@ function Loading() {
   )
 }
 
+function MsalRedirectHandler() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  useEffect(() => {
+    const pending = sessionStorage.getItem('onenote-auth-pending')
+    if (pending && location.hash.includes('code=')) {
+      import('@/lib/onenote/auth').then(({ handleRedirect, clearAuthPending }) => {
+        handleRedirect().then((ok) => {
+          clearAuthPending()
+          if (ok) navigate('/import/onenote', { replace: true })
+        })
+      })
+    }
+  }, [location.hash, navigate])
+  return null
+}
+
 export default function App() {
   return (
     <Suspense fallback={<Loading />}>
+      <MsalRedirectHandler />
       <Routes>
         {/* Reader is full-bleed — outside the shell chrome. */}
         <Route path="/poem/:id" element={<ReaderPage />} />
