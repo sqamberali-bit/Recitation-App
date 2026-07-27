@@ -15,7 +15,7 @@ if (!root) throw new Error('Root element missing')
 createRoot(root).render(
   <StrictMode>
     <ErrorBoundary>
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
         <SettingsProvider>
           <LibraryProvider>
             <ToastProvider>
