@@ -3,18 +3,18 @@ import type { PublicClientApplication, AccountInfo } from '@azure/msal-browser'
 const SCOPES = ['Notes.Read']
 
 let pca: PublicClientApplication | null = null
-let redirectHandled = false
 
 async function getMsal(): Promise<PublicClientApplication> {
   if (pca) return pca
   const { PublicClientApplication } = await import('@azure/msal-browser')
   const clientId = import.meta.env.VITE_ONENOTE_CLIENT_ID as string | undefined
   if (!clientId) throw new Error('VITE_ONENOTE_CLIENT_ID is not configured')
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '')
   pca = new PublicClientApplication({
     auth: {
       clientId,
       authority: 'https://login.microsoftonline.com/consumers',
-      redirectUri: window.location.origin + import.meta.env.BASE_URL.replace(/\/$/, '') + '/import/onenote',
+      redirectUri: window.location.origin + base + '/auth.html',
     },
     cache: { cacheLocation: 'sessionStorage' },
   })
@@ -22,17 +22,10 @@ async function getMsal(): Promise<PublicClientApplication> {
   return pca
 }
 
-export async function handleRedirect(): Promise<boolean> {
-  if (redirectHandled) return false
-  redirectHandled = true
+export async function signIn(): Promise<string> {
   const msal = await getMsal()
-  const result = await msal.handleRedirectPromise()
-  return !!result
-}
-
-export async function signIn(): Promise<void> {
-  const msal = await getMsal()
-  await msal.loginRedirect({ scopes: SCOPES })
+  const result = await msal.loginPopup({ scopes: SCOPES })
+  return result.accessToken
 }
 
 export async function getToken(): Promise<string> {
@@ -46,8 +39,8 @@ export async function getToken(): Promise<string> {
     })
     return result.accessToken
   } catch {
-    await msal.acquireTokenRedirect({ scopes: SCOPES })
-    throw new Error('Redirecting to re-authenticate…')
+    const result = await msal.acquireTokenPopup({ scopes: SCOPES })
+    return result.accessToken
   }
 }
 
@@ -55,7 +48,7 @@ export async function signOut(): Promise<void> {
   if (!pca) return
   const accounts = pca.getAllAccounts()
   if (accounts.length) {
-    await pca.logoutRedirect({ account: accounts[0] })
+    await pca.logoutPopup({ account: accounts[0] })
   }
   pca = null
 }
