@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { Navigate, Route, Routes, useNavigate, useLocation } from 'react-router-dom'
 import { AppShell } from '@/components/AppShell'
 import { LibraryPage } from '@/pages/LibraryPage'
@@ -69,9 +69,20 @@ function MsalRedirectHandler() {
   return null
 }
 
+function AutoSync() {
+  const started = useRef(false)
+  useEffect(() => {
+    if (started.current) return
+    started.current = true
+    import('@/lib/sync').then(({ startAutoSync }) => startAutoSync())
+  }, [])
+  return null
+}
+
 export default function App() {
   return (
     <Suspense fallback={<Loading />}>
+      <AutoSync />
       <MsalRedirectHandler />
       <Routes>
         {/* Reader is full-bleed — outside the shell chrome. */}

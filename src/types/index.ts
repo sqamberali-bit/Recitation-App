@@ -148,6 +148,7 @@ export interface AppSettings {
   aiCorrectionEndpoint?: string
   aiCorrectionKey?: string
   lastBackupAt?: number
+  lastSyncAt?: number
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {

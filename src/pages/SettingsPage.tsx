@@ -16,6 +16,7 @@ import { useSettings } from '@/store/settings'
 import { useLibrary } from '@/store/library'
 import { downloadBlob, exportLibrary } from '@/lib/exportImport'
 import { pullBackup, pushBackup } from '@/lib/backup'
+import { syncNow } from '@/lib/sync'
 import { findDuplicateGroups, getLibraryStats, type LibraryStats } from '@/db/repository'
 import { resetDatabase } from '@/db/database'
 import { formatBytes } from '@/lib/text'
@@ -43,6 +44,19 @@ export function SettingsPage() {
       toast.show(`Exported ${formatBytes(blob.size)}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Export failed')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const doSync = async () => {
+    setBusy('sync')
+    try {
+      const result = await syncNow()
+      const total = result.pushed.poems + result.pulled.poems + result.deleted
+      toast.show(total > 0 ? `Synced: ${result.pushed.poems} up, ${result.pulled.poems} down` : 'Already in sync')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Sync failed')
     } finally {
       setBusy('')
     }
@@ -206,38 +220,51 @@ export function SettingsPage() {
           />
         </div>
 
-        {/* ---------- Cloud ---------- */}
-        <div className="section-head"><h2>Cloud backup</h2></div>
+        {/* ---------- Cloud sync ---------- */}
+        <div className="section-head"><h2>Cloud sync</h2></div>
         <div className="field">
-          <label>Sync endpoint (optional)</label>
-          <input className="input" value={settings.syncEndpoint ?? ''} placeholder="https://…"
+          <label>Sync endpoint</label>
+          <input className="input" value={settings.syncEndpoint ?? ''} placeholder="https://your-worker.workers.dev"
             onChange={(e) => void update({ syncEndpoint: e.target.value })} />
           <p className="hint">
-            A URL that accepts <code>PUT</code> (upload) and <code>GET</code> (download) of a single
-            file — e.g. a pre-signed S3 URL or your own small server. Leave blank to stay fully offline.
+            Your Cloudflare Worker URL. Syncs poems, authors, and collections across devices.
+            Leave blank to stay fully offline.
           </p>
         </div>
         {settings.syncEndpoint && (
           <div className="field">
-            <label>Sync access token (optional)</label>
+            <label>Sync token</label>
             <input className="input" type="password" value={settings.syncKey ?? ''} autoComplete="off"
-              placeholder="Sent as: Authorization: Bearer …"
+              placeholder="Your secret token"
               onChange={(e) => void update({ syncKey: e.target.value })} />
-            <p className="hint">Only sent to the endpoint above. Separate from your AI key.</p>
+            <p className="hint">The SYNC_TOKEN you set on your Worker. Never shared with other services.</p>
           </div>
         )}
-        {settings.syncEndpoint && (
-          <div className="row-flex gap-3" style={{ marginBottom: 8 }}>
-            <button className="btn btn--ghost btn--block" onClick={doPush} disabled={!!busy}>
-              <IconCloud /> {busy === 'push' ? 'Backing up…' : 'Back up now'}
-            </button>
-            <button className="btn btn--ghost btn--block" onClick={doPull} disabled={!!busy}>
-              {busy === 'pull' ? 'Restoring…' : 'Restore'}
-            </button>
-          </div>
+        {settings.syncEndpoint && settings.syncKey && (
+          <button className="btn btn--primary btn--block" onClick={doSync} disabled={!!busy} style={{ marginBottom: 8 }}>
+            <IconCloud /> {busy === 'sync' ? 'Syncing…' : 'Sync now'}
+          </button>
         )}
-        {settings.lastBackupAt && (
-          <p className="hint">Last backup: {new Date(settings.lastBackupAt).toLocaleString()}</p>
+        {settings.lastSyncAt && (
+          <p className="hint">Last sync: {new Date(settings.lastSyncAt).toLocaleString()}</p>
+        )}
+
+        {/* ---------- Cloud backup (legacy) ---------- */}
+        {settings.syncEndpoint && !settings.syncKey && (
+          <>
+            <div className="section-head"><h2>Snapshot backup</h2></div>
+            <div className="row-flex gap-3" style={{ marginBottom: 8 }}>
+              <button className="btn btn--ghost btn--block" onClick={doPush} disabled={!!busy}>
+                <IconCloud /> {busy === 'push' ? 'Backing up…' : 'Back up now'}
+              </button>
+              <button className="btn btn--ghost btn--block" onClick={doPull} disabled={!!busy}>
+                {busy === 'pull' ? 'Restoring…' : 'Restore'}
+              </button>
+            </div>
+            {settings.lastBackupAt && (
+              <p className="hint">Last backup: {new Date(settings.lastBackupAt).toLocaleString()}</p>
+            )}
+          </>
         )}
 
         {/* ---------- AI ---------- */}

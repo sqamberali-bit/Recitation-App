@@ -107,11 +107,12 @@ export async function getPoemWithMedia(id: string): Promise<PoemWithMedia | unde
   return { poem, images: images.sort(order), pdfs: pdfs.sort(order) }
 }
 
-/** Delete a poem and all of its media blobs atomically. */
+/** Delete a poem and all of its media blobs atomically. Records a tombstone for sync. */
 export async function deletePoem(id: string): Promise<void> {
-  await db.transaction('rw', db.poems, db.media, async () => {
+  await db.transaction('rw', db.poems, db.media, db.tombstones, async () => {
     await db.media.where('poemId').equals(id).delete()
     await db.poems.delete(id)
+    await db.tombstones.put({ id, table: 'poems', deletedAt: Date.now() })
   })
 }
 
@@ -175,7 +176,7 @@ export async function saveCollection(
 }
 
 export async function deleteCollection(id: string): Promise<void> {
-  await db.transaction('rw', db.poems, db.collections, async () => {
+  await db.transaction('rw', db.poems, db.collections, db.tombstones, async () => {
     await db.collections.delete(id)
     const affected = await db.poems.where('collectionIds').equals(id).toArray()
     for (const p of affected) {
@@ -183,6 +184,7 @@ export async function deleteCollection(id: string): Promise<void> {
         collectionIds: p.collectionIds.filter((c) => c !== id),
       })
     }
+    await db.tombstones.put({ id, table: 'collections', deletedAt: Date.now() })
   })
 }
 

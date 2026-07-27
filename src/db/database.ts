@@ -13,12 +13,19 @@
 import Dexie, { type Table } from 'dexie'
 import type { Author, Collection, MediaAsset, Poem, AppSettings } from '@/types'
 
+export interface Tombstone {
+  id: string
+  table: 'poems' | 'authors' | 'collections'
+  deletedAt: number
+}
+
 export class RecitationDB extends Dexie {
   poems!: Table<Poem, string>
   media!: Table<MediaAsset, string>
   authors!: Table<Author, string>
   collections!: Table<Collection, string>
   settings!: Table<AppSettings, string>
+  tombstones!: Table<Tombstone, string>
 
   constructor() {
     super('recitation-db')
@@ -35,6 +42,10 @@ export class RecitationDB extends Dexie {
     this.version(2).stores({
       poems:
         'id, title, language, kind, authorId, authorName, category, favouritedAt, createdAt, updatedAt, lastViewedAt, viewCount, contentHash, onenoteSourceId, *collectionIds, *tags, *topics, *occasions',
+    })
+
+    this.version(3).stores({
+      tombstones: 'id, table, deletedAt',
     })
   }
 }

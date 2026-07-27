@@ -1,0 +1,13 @@
+{
+  "name": "recitation-sync-worker",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:init": "wrangler d1 execute recitation-sync --file=schema.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241004.0",
+    "wrangler": "^3.80.0"
+  }
+}
