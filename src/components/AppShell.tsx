@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   IconHome,
@@ -8,6 +9,7 @@ import {
   IconPlus,
   IconBook,
 } from './icons'
+import { useLibrary } from '@/store/library'
 
 const NAV = [
   { to: '/', label: 'Library', icon: IconHome, end: true },
@@ -16,6 +18,42 @@ const NAV = [
   { to: '/browse', label: 'Browse', icon: IconLayers, end: false },
   { to: '/settings', label: 'Settings', icon: IconSettings, end: false },
 ]
+
+function SidebarCategories() {
+  const { facets } = useLibrary()
+  const [open, setOpen] = useState(true)
+  const cats = facets.categories
+
+  if (!cats.length) return null
+
+  return (
+    <div className="sidebar__section">
+      <button
+        className="sidebar__section-head"
+        onClick={() => setOpen(!open)}
+      >
+        <span>Categories</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: open ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <div className="sidebar__cats">
+          {cats.map((c) => (
+            <NavLink
+              key={c.value}
+              to={`/browse/results?category=${encodeURIComponent(c.value)}&label=${encodeURIComponent(c.value)}`}
+              className="sidebar__cat"
+            >
+              <span className="sidebar__cat-name" dir="auto">{c.value}</span>
+              <span className="sidebar__cat-count">{c.count}</span>
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function AppShell() {
   const navigate = useNavigate()
@@ -34,6 +72,7 @@ export function AppShell() {
             {label}
           </NavLink>
         ))}
+        <SidebarCategories />
         <div className="spacer" />
         <button className="btn btn--primary btn--block" onClick={() => navigate('/editor/new')}>
           <IconPlus /> New poem
