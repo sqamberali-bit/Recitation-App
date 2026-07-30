@@ -1,6 +1,6 @@
 import { db } from '@/db/database'
 import { getSettings, saveSettings } from '@/db/repository'
-import type { Poem, Author, Collection } from '@/types'
+import type { Poem, Author, Collection, MediaAsset } from '@/types'
 
 interface SyncRecord {
   id: string
@@ -126,6 +126,12 @@ export async function syncNow(): Promise<SyncResult> {
 
   await saveSettings({ lastSyncAt: body.serverTime } as any)
 
+  try {
+    await syncMedia(config, settings)
+  } catch {
+    // media sync is best-effort
+  }
+
   return {
     pushed: {
       poems: localPoems.length,
@@ -138,6 +144,65 @@ export async function syncNow(): Promise<SyncResult> {
       collections: body.collections.filter((r) => !r.deletedAt).length,
     },
     deleted,
+  }
+}
+
+async function syncMedia(
+  config: { endpoint: string; token: string },
+  settings: any,
+) {
+  const mediaSince: number = (settings as any).lastMediaSyncAt ?? 0
+
+  const newMedia = await db.media.where('createdAt').above(mediaSince).toArray()
+  let allUploaded = true
+  for (const m of newMedia) {
+    try {
+      const r = await fetch(`${config.endpoint}/api/media/${encodeURIComponent(m.id)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': m.mime || 'application/octet-stream',
+          Authorization: `Bearer ${config.token}`,
+        },
+        body: m.blob,
+      })
+      if (!r.ok) allUploaded = false
+    } catch {
+      allUploaded = false
+    }
+  }
+
+  const localMediaIds = new Set(await db.media.toCollection().primaryKeys())
+  const poems = await db.poems.toArray()
+  for (const p of poems) {
+    const imgIds: string[] = p.imageIds || []
+    const pdfIdsList: string[] = p.pdfIds || []
+    for (const mid of [...imgIds, ...pdfIdsList]) {
+      if (localMediaIds.has(mid)) continue
+      try {
+        const r = await fetch(`${config.endpoint}/api/media/${encodeURIComponent(mid)}`, {
+          headers: { Authorization: `Bearer ${config.token}` },
+        })
+        if (!r.ok) continue
+        const blob = await r.blob()
+        const asset: MediaAsset = {
+          id: mid,
+          poemId: p.id,
+          type: imgIds.includes(mid) ? 'image' : 'pdf',
+          mime: r.headers.get('Content-Type') || 'application/octet-stream',
+          name: mid,
+          blob,
+          size: blob.size,
+          order: imgIds.includes(mid) ? imgIds.indexOf(mid) : pdfIdsList.indexOf(mid),
+          createdAt: Date.now(),
+        }
+        await db.media.put(asset)
+        localMediaIds.add(mid)
+      } catch { /* skip */ }
+    }
+  }
+
+  if (allUploaded || !newMedia.length) {
+    await saveSettings({ lastMediaSyncAt: Date.now() } as any)
   }
 }
 
