@@ -169,7 +169,7 @@ export function startAutoSync(intervalMs = 5 * 60 * 1000): void {
       // auto-sync failures are silent
     }
   }
-  void run()
+  setTimeout(run, 3000)
   autoSyncTimer = setInterval(run, intervalMs)
 
   window.addEventListener('online', run)

@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/database'
 import { SearchIndex } from '@/lib/search'
@@ -73,10 +73,18 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   const byId = useMemo(() => new Map(list.map((p) => [p.id, p])), [list])
 
-  const searchIndex = useMemo(() => {
-    const idx = new SearchIndex()
-    idx.rebuild(list)
-    return idx
+  const [searchIndex, setSearchIndex] = useState(() => new SearchIndex())
+  const listRef = useRef(list)
+  listRef.current = list
+  useEffect(() => {
+    const poems = listRef.current
+    if (!poems.length) return
+    const id = requestAnimationFrame(() => {
+      const idx = new SearchIndex()
+      idx.rebuild(poems)
+      setSearchIndex(idx)
+    })
+    return () => cancelAnimationFrame(id)
   }, [list])
 
   const facets = useMemo(() => computeFacets(list), [list])

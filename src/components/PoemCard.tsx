@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { IconStarFill, IconImage, IconClock } from './icons'
 import { BlobImage } from './BlobImage'
@@ -6,11 +6,25 @@ import { directionOf, excerpt } from '@/lib/text'
 import { getMedia, toggleFavourite } from '@/db/repository'
 import type { Poem } from '@/types'
 
-/** Lazily load a poem's first-image thumbnail (only for mounted cards). */
-function useThumb(id?: string): Blob | undefined {
+function useThumb(id: string | undefined, cardRef: React.RefObject<HTMLElement | null>): Blob | undefined {
   const [blob, setBlob] = useState<Blob>()
+  const [visible, setVisible] = useState(false)
+
   useEffect(() => {
-    if (!id) {
+    const el = cardRef.current
+    if (!el) return
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) {
+        setVisible(true)
+        io.disconnect()
+      }
+    }, { rootMargin: '200px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [cardRef])
+
+  useEffect(() => {
+    if (!id || !visible) {
       setBlob(undefined)
       return
     }
@@ -18,23 +32,23 @@ function useThumb(id?: string): Blob | undefined {
     getMedia(id).then((m) => {
       if (alive) setBlob(m?.thumbnail ?? m?.blob)
     })
-    return () => {
-      alive = false
-    }
-  }, [id])
+    return () => { alive = false }
+  }, [id, visible])
+
   return blob
 }
 
 export function PoemCard({ poem }: { poem: Poem }) {
   const navigate = useNavigate()
-  const thumb = useThumb(poem.imageIds[0])
+  const cardRef = useRef<HTMLDivElement>(null)
+  const thumb = useThumb(poem.imageIds[0], cardRef)
   const displayTitle = poem.titleNative || poem.title
   const titleRtl = directionOf(displayTitle) === 'rtl'
   const bodyRtl = directionOf(poem.text) === 'rtl'
   const preview = excerpt(poem.text, 100)
 
   return (
-    <div className="card" onClick={() => navigate(`/poem/${poem.id}`)} role="button" tabIndex={0}
+    <div ref={cardRef} className="card" onClick={() => navigate(`/poem/${poem.id}`)} role="button" tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && navigate(`/poem/${poem.id}`)}>
       {poem.favourite && <IconStarFill className="card__star" width={18} />}
       <div className="card__top">
