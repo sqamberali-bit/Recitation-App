@@ -105,6 +105,25 @@ export function LibraryPage() {
           </div>
         )}
 
+        {/* Category chips */}
+        {facets.categories.length > 0 && (
+          <div className="scroller" style={{ marginBottom: 14 }}>
+            <button className={`chip ${!query.category ? 'chip--active' : ''}`} onClick={() => set({ category: null })}>
+              All categories
+            </button>
+            {facets.categories.map((f) => (
+              <button
+                key={f.value}
+                className={`chip ${query.category === f.value ? 'chip--active' : ''}`}
+                onClick={() => set({ category: query.category === f.value ? null : f.value })}
+                dir="auto"
+              >
+                {f.value} <span className="chip__count">{f.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="row-flex" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
           <span className="muted text-sm">{results.length} {results.length === 1 ? 'poem' : 'poems'}</span>
           <select
