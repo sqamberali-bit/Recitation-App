@@ -1,13 +1,17 @@
 // Recitation Sync Worker — paste this into the Cloudflare Dashboard editor
 
+// Hardcoded token — the app is already behind Cloudflare Access (SSO),
+// so this is just a secondary check. Change this to your own value.
+const SYNC_TOKEN = 'recitation-sync-2024-sqamberali';
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: corsHeaders(request, env) });
+      return new Response(null, { status: 204, headers: corsHeaders(request) });
     }
 
-    if (!authenticate(request, env)) {
-      return new Response('Unauthorized', { status: 401, headers: corsHeaders(request, env) });
+    if (!authenticate(request)) {
+      return new Response('Unauthorized', { status: 401, headers: corsHeaders(request) });
     }
 
     const url = new URL(request.url);
@@ -26,31 +30,29 @@ export default {
 
     if (path === '/api/health') {
       return new Response(JSON.stringify({ ok: true, time: Date.now() }), {
-        headers: { 'Content-Type': 'application/json', ...corsHeaders(request, env) },
+        headers: { 'Content-Type': 'application/json', ...corsHeaders(request) },
       });
     }
 
-    return new Response('Not found', { status: 404, headers: corsHeaders(request, env) });
+    return new Response('Not found', { status: 404, headers: corsHeaders(request) });
   },
 };
 
-function corsHeaders(request, env) {
+function corsHeaders(request) {
   const origin = request.headers.get('Origin') || '';
-  const allowed = env.ALLOWED_ORIGIN || '*';
-  const match = allowed === '*' || origin.startsWith(allowed);
   return {
-    'Access-Control-Allow-Origin': match ? origin : '',
+    'Access-Control-Allow-Origin': origin || '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
   };
 }
 
-function authenticate(request, env) {
+function authenticate(request) {
   const auth = request.headers.get('Authorization');
   if (!auth) return false;
   const token = auth.replace(/^Bearer\s+/i, '');
-  return token === env.SYNC_TOKEN;
+  return token === SYNC_TOKEN;
 }
 
 async function handleSync(request, env) {
@@ -99,7 +101,7 @@ async function handleSync(request, env) {
 
   return new Response(
     JSON.stringify({ poems, authors, collections, serverTime: Date.now() }),
-    { headers: { 'Content-Type': 'application/json', ...corsHeaders(request, env) } }
+    { headers: { 'Content-Type': 'application/json', ...corsHeaders(request) } }
   );
 }
 
@@ -108,20 +110,20 @@ async function handleMediaPut(request, env, id) {
   const contentType = request.headers.get('Content-Type') || 'application/octet-stream';
   await env.MEDIA.put(id, body, { httpMetadata: { contentType } });
   return new Response(JSON.stringify({ ok: true }), {
-    headers: { 'Content-Type': 'application/json', ...corsHeaders(request, env) },
+    headers: { 'Content-Type': 'application/json', ...corsHeaders(request) },
   });
 }
 
 async function handleMediaGet(request, env, id) {
   const object = await env.MEDIA.get(id);
   if (!object) {
-    return new Response('Not found', { status: 404, headers: corsHeaders(request, env) });
+    return new Response('Not found', { status: 404, headers: corsHeaders(request) });
   }
   return new Response(object.body, {
     headers: {
       'Content-Type': (object.httpMetadata && object.httpMetadata.contentType) || 'application/octet-stream',
       'Cache-Control': 'public, max-age=31536000, immutable',
-      ...corsHeaders(request, env),
+      ...corsHeaders(request),
     },
   });
 }

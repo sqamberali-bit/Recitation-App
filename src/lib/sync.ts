@@ -22,10 +22,13 @@ export interface SyncResult {
   deleted: number
 }
 
+const ENV_ENDPOINT = import.meta.env.VITE_SYNC_ENDPOINT as string | undefined
+const ENV_TOKEN = import.meta.env.VITE_SYNC_TOKEN as string | undefined
+
 async function getConfig(): Promise<{ endpoint: string; token: string } | null> {
   const s = await getSettings()
-  const endpoint = s.syncEndpoint?.trim()
-  const token = s.syncKey?.trim()
+  const endpoint = (s.syncEndpoint ?? ENV_ENDPOINT ?? '').trim()
+  const token = (s.syncKey ?? ENV_TOKEN ?? '').trim()
   if (!endpoint || !token) return null
   return { endpoint: endpoint.replace(/\/$/, ''), token }
 }
