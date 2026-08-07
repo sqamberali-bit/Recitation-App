@@ -13,9 +13,10 @@ import { processImageFile } from '@/lib/media'
 import { savePoem } from '@/db/repository'
 import { detectLanguage } from '@/lib/text'
 import { parseMhtFile, importMhtPages, type MhtPage } from '@/lib/mht'
+import { NOHA_COLLECTION } from '@/data/noha-collection'
 import type { MediaAsset } from '@/types'
 
-type Mode = 'text' | 'images' | 'backup' | 'mht'
+type Mode = 'text' | 'images' | 'backup' | 'mht' | 'nohas'
 
 export function ImportPage() {
   const navigate = useNavigate()
@@ -143,6 +144,20 @@ export function ImportPage() {
     }
   }
 
+  /* ---------------- noha collection import ---------------- */
+  const importNohaCollection = async () => {
+    setBusy(true)
+    try {
+      const n = await importSimplePoems(NOHA_COLLECTION)
+      toast.show(`Imported ${n} nohas into your library`)
+      navigate('/')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Noha import failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   /* ---------------- backup restore ---------------- */
   const restoreBackup = async (files: FileList | null) => {
     const file = files?.[0]
@@ -174,9 +189,9 @@ export function ImportPage() {
 
       <div className="shell">
         <div className="scroller" style={{ marginBottom: 18 }}>
-          {(['text', 'images', 'mht', 'backup'] as Mode[]).map((m) => (
+          {(['text', 'images', 'mht', 'nohas', 'backup'] as Mode[]).map((m) => (
             <button key={m} className={`chip ${mode === m ? 'chip--active' : ''}`} onClick={() => setMode(m)}>
-              {m === 'text' ? 'Paste text' : m === 'images' ? 'Photos & scans' : m === 'mht' ? 'OneNote MHT' : 'Restore backup'}
+              {m === 'text' ? 'Paste text' : m === 'images' ? 'Photos & scans' : m === 'mht' ? 'OneNote MHT' : m === 'nohas' ? 'Noha Collection' : 'Restore backup'}
             </button>
           ))}
         </div>
@@ -287,6 +302,31 @@ export function ImportPage() {
                   onChange={(e) => { void parseMht(e.target.files); e.target.value = '' }} />
               </>
             )}
+          </>
+        )}
+
+        {mode === 'nohas' && (
+          <>
+            <p className="page-sub">
+              A curated collection of <strong>{NOHA_COLLECTION.length} well-known nohas</strong> by
+              popular reciters including Nadeem Sarwar, Mir Hasan Mir, Farhan Ali Waris,
+              Ali Safdar, Irfan Haider, and more. Covers Muharram, Safar, and Arbaeen occasions.
+            </p>
+            <div className="rows" style={{ marginBottom: 16, maxHeight: 300, overflowY: 'auto' }}>
+              {NOHA_COLLECTION.map((n, i) => (
+                <div key={i} className="row" style={{ cursor: 'default' }}>
+                  <div className="row__body">
+                    <div className="row__title" dir="auto">{n.title}</div>
+                    <div className="row__sub" dir="auto">
+                      {n.author} {n.category ? `· ${n.category}` : ''}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button className="btn btn--primary btn--block" onClick={importNohaCollection} disabled={busy}>
+              {busy ? 'Importing…' : `Import ${NOHA_COLLECTION.length} nohas`}
+            </button>
           </>
         )}
 
